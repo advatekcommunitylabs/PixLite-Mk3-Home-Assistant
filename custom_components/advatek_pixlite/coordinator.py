@@ -1,5 +1,6 @@
 """Shared polling and controller command handling."""
 from datetime import timedelta
+import asyncio
 import logging
 import time
 
@@ -16,11 +17,17 @@ class PixLiteCoordinator(DataUpdateCoordinator):
         self.client = client
         self.files = []
         self.files_updated = 0
+        self.control_lock = asyncio.Lock()
 
     async def _async_update_data(self):
+        async with self.control_lock:
+            return await self._read_data()
+
+    async def _read_data(self):
         try:
             status = await self.client.read("status")
             stats = await self.client.read("statistic", ["dev", "pixData", "pixPwrOuts"])
+            config = await self.client.read("config", ["pix.colorType", "operIf"])
             if time.monotonic() - self.files_updated >= 60:
                 try:
                     self.files = await self.client.files()
@@ -30,15 +37,23 @@ class PixLiteCoordinator(DataUpdateCoordinator):
                         self.files = []
                     elif err.code != 10:  # Recording/formatting can prohibit listing.
                         raise
-            return {"status": status, "statistic": stats, "files": list(self.files)}
+            return {"status": status, "statistic": stats, "files": list(self.files), "config": config}
         except InvalidAuth as err:
             raise ConfigEntryAuthFailed(str(err)) from err
         except PixLiteError as err:
             raise UpdateFailed(str(err)) from err
 
     async def command(self, name, params=None):
+        await self.commands([(name, params)])
+
+    async def commands(self, commands):
+        """Keep multi-request light actions together; do not retry output changes."""
         try:
-            await self.client.request(name, params)
+            async with self.control_lock:
+                for name, params in commands:
+                    await self.client.request(name, params)
         except PixLiteError as err:
+            # An earlier command may have succeeded; reconcile partial success.
+            await self.async_request_refresh()
             raise HomeAssistantError(str(err)) from err
         await self.async_request_refresh()

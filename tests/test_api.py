@@ -126,3 +126,12 @@ async def test_separate_controllers_have_separate_locks(controller):
     client, state = controller
     other = api.PixLiteClient(client.session, "example.local")
     assert client.lock is not other.lock
+
+
+@pytest.mark.asyncio
+async def test_intensity_and_color_wire_format(controller):
+    client, state = controller
+    await client.request("progInt", {"item": [{"out": "Pix", "op": "HiSet", "fc": 100, "durMs": 1500}]})
+    await client.request("modePlayback", {"op": "Color", "color": [65535, 0, 0, 1000, 2000], "colorRes": "16Bit", "fadeMs": 2000})
+    assert list(state["requests"][0]["params"]["item"][0]) == ["out", "op", "fc", "durMs"]
+    assert list(state["requests"][1]["params"]) == ["op", "color", "colorRes", "fadeMs"]
