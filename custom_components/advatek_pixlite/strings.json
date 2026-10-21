@@ -1,0 +1,52 @@
+{
+  "title": "Advatek PixLite Mk3",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect a PixLite Mk3",
+        "description": "Enter the controller address. API v1.9 is required. HTTPS uses port 4443 unless overridden and requires a trusted certificate.",
+        "data": {
+          "host": "IP address or hostname",
+          "username": "User",
+          "password": "Password",
+          "use_ssl": "Use HTTPS",
+          "port": "Port (optional)"
+        }
+      },
+      "reconfigure": {
+        "title": "Connect a PixLite Mk3",
+        "description": "Enter the controller address. API v1.9 is required. HTTPS uses port 4443 unless overridden and requires a trusted certificate.",
+        "data": {
+          "host": "IP address or hostname",
+          "username": "User",
+          "password": "Password",
+          "use_ssl": "Use HTTPS",
+          "port": "Port (optional)"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Connect a PixLite Mk3",
+        "description": "Enter the controller address. API v1.9 is required. HTTPS uses port 4443 unless overridden and requires a trusted certificate.",
+        "data": {
+          "host": "IP address or hostname",
+          "username": "User",
+          "password": "Password",
+          "use_ssl": "Use HTTPS",
+          "port": "Port (optional)"
+        }
+      }
+    },
+    "error": {
+      "invalid_host": "Enter an IPv4 address or hostname without a scheme, path or port.",
+      "invalid_auth": "Authentication failed. Check the user and password.",
+      "unsupported_device": "A PixLite Mk3 supporting API v1.9 is required.",
+      "cannot_connect": "Cannot communicate with the controller. Check address, credentials, network and TLS certificate."
+    },
+    "abort": {
+      "already_configured": "This controller is already configured.",
+      "wrong_device": "This is a different controller. Add it as another integration entry.",
+      "reauth_successful": "Authentication updated.",
+      "reconfigure_successful": "Controller connection updated."
+    }
+  }
+}
