@@ -1,6 +1,6 @@
 # Advatek PixLite Mk3 for Home Assistant
 
-Local custom integration, version 0.4.0. Add one entry per controller; controllers have independent connections and polling. Device and entity IDs use the controller MAC address, so names and IP addresses can change without creating new entities.
+Local custom integration, version 0.4.1. Add one entry per controller; controllers have independent connections and polling. Device and entity IDs use the controller MAC address, so names and IP addresses can change without creating new entities.
 
 ## Install
 
@@ -21,7 +21,7 @@ Requires a controller advertising API **v1.9** and a modern Home Assistant insta
 - Separate **Play**, **Pause**, **Previous** and **Next** playback buttons with matching icons. Play resumes an existing file playback; choose a Showtime file to start a scene. Previous and Next navigate playlist items, not the file browser. Existing button unique IDs are preserved, including the former Resume button.
 - Other buttons: Blank, Freeze, Live Data, Restart current mode, Refresh Showtime files.
 - **Aux N intensity** faders (0–100%) appear for auxiliary ports configured as DMX Output. Adjusting a fader takes priority over live intensity for that auxiliary output without changing pixel brightness or playback mode. Values reflect the currently controlling intensity. The integration detects newly enabled DMX outputs while polling; previously added faders become unavailable when their port is changed to input or disabled.
-- Sensors: temperature, CPU usage, input/output frame rate, operating mode, playback filename, input bank voltages, and supported per-output currents, voltages and power status.
+- The device Sensors section shows temperature, CPU usage, input/output frame rate, input bank voltages, and supported per-output currents, voltages and power status. Operating mode and playback status remain diagnostic sensors.
 - Binary sensors: playback error and playback paused.
 - Status and measurements refresh every 10 seconds; the file list refreshes every 60 seconds. Commands request an immediate refresh. Disconnected controllers become unavailable and polling retries automatically.
 

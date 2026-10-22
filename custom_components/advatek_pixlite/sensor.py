@@ -34,6 +34,8 @@ class PixLiteSensor(PixLiteEntity, SensorEntity):
 
     def __init__(self, coordinator, key, name, path, unit, device_class, divisor):
         super().__init__(coordinator, key, name)
+        if path.startswith("statistic."):
+            self._attr_entity_category = None
         self.path, self.divisor = path, divisor
         self._attr_native_unit_of_measurement = unit
         self._attr_device_class = device_class
