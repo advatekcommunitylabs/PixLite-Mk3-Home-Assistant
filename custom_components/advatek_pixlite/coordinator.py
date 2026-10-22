@@ -26,8 +26,13 @@ class PixLiteCoordinator(DataUpdateCoordinator):
     async def _read_data(self):
         try:
             status = await self.client.read("status")
-            stats = await self.client.read("statistic", ["dev", "pixData", "pixPwrOuts"])
-            config = await self.client.read("config", ["pix.colorType", "operIf"])
+            statistic_paths = ["dev", "pixData", "pixPwrOuts"]
+            config_paths = ["pix.colorType", "operIf"]
+            if self.client.constants.get("dev", {}).get("auxPorts", 0):
+                statistic_paths.append("auxData")
+                config_paths.append("auxPort.mode")
+            stats = await self.client.read("statistic", statistic_paths)
+            config = await self.client.read("config", config_paths)
             if time.monotonic() - self.files_updated >= 60:
                 try:
                     self.files = await self.client.files()

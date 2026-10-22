@@ -57,7 +57,11 @@ class PixLiteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             defaults.update(user_input)
         schema = vol.Schema({
             vol.Required("host", default=defaults.get("host", "")): str,
-            vol.Required("username", default=defaults.get("username", "admin")): vol.In(["admin", "oper"]),
+            vol.Required("username", default=defaults.get("username", "admin")): selector.SelectSelector(
+                selector.SelectSelectorConfig(options=[
+                    {"value": "admin", "label": "Administrator"},
+                    {"value": "oper", "label": "Operator"},
+                ], mode=selector.SelectSelectorMode.DROPDOWN)),
             vol.Optional("password", default=defaults.get("password", "")): selector.TextSelector(
                 selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)),
             vol.Required("use_ssl", default=defaults.get("use_ssl", False)): bool,

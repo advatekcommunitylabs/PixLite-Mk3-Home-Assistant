@@ -7,7 +7,7 @@
         "description": "Enter the controller address. API v1.9 is required. HTTPS uses port 4443 unless overridden and requires a trusted certificate.",
         "data": {
           "host": "IP address or hostname",
-          "username": "User",
+          "username": "User type",
           "password": "Password",
           "use_ssl": "Use HTTPS",
           "port": "Port (optional)"
@@ -18,7 +18,7 @@
         "description": "Enter the controller address. API v1.9 is required. HTTPS uses port 4443 unless overridden and requires a trusted certificate.",
         "data": {
           "host": "IP address or hostname",
-          "username": "User",
+          "username": "User type",
           "password": "Password",
           "use_ssl": "Use HTTPS",
           "port": "Port (optional)"
@@ -29,7 +29,7 @@
         "description": "Enter the controller address. API v1.9 is required. HTTPS uses port 4443 unless overridden and requires a trusted certificate.",
         "data": {
           "host": "IP address or hostname",
-          "username": "User",
+          "username": "User type",
           "password": "Password",
           "use_ssl": "Use HTTPS",
           "port": "Port (optional)"

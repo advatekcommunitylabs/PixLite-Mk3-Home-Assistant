@@ -1,13 +1,13 @@
 # Advatek PixLite Mk3 for Home Assistant
 
-Local custom integration, version 0.2.0. Add one entry per controller; controllers have independent connections and polling. Device and entity IDs use the controller MAC address, so names and IP addresses can change without creating new entities.
+Local custom integration, version 0.3.0. Add one entry per controller; controllers have independent connections and polling. Device and entity IDs use the controller MAC address, so names and IP addresses can change without creating new entities.
 
 ## Install
 
 1. Copy `custom_components/advatek_pixlite` into your Home Assistant configuration directory, resulting in `/config/custom_components/advatek_pixlite/manifest.json`.
 2. Restart Home Assistant.
 3. Open **Settings > Devices & services > Add integration > Advatek PixLite Mk3**.
-4. Enter the controller IP address/hostname, user (`admin` or enabled `oper`) and password. An empty password is supported. HTTP defaults to 80; HTTPS defaults to 4443. Leave the optional port blank for these defaults.
+4. Enter the controller IP address/hostname, user (Administrator or enabled Operator) and password. An empty password is supported. HTTP defaults to 80; HTTPS defaults to 4443. Leave the optional port blank for these defaults.
 5. Repeat for each additional controller. Assign each device a useful name and area.
 
 Requires a controller advertising API **v1.9** and a modern Home Assistant installation supporting config entry `runtime_data`. Intended baseline: Home Assistant 2025.1 or later; full HA runtime compatibility has not yet been verified. Use **Reconfigure** on the integration entry after an IP address or password change. A replacement controller with a different MAC should be added separately.
@@ -18,7 +18,9 @@ Requires a controller advertising API **v1.9** and a modern Home Assistant insta
 - **Showtime colour preset** selects one of up to 12 controller palette colours. It starts solid-colour playback, preserves the current intensity, and uses Showtime's configured fade time. Turn the light on if master intensity is zero. Presets are read from the controller and refresh with polling; editing/saving the controller palette is not included.
 - **Intensity priority** selects Override live intensity or Yield to live intensity. Explicit light on/off/brightness commands take priority again. Yield allows incoming live intensity to win when available; otherwise the programmed factor applies.
 - **Showtime file** select lists `.scn` scenes and `.pl` playlists on the microSD card. Selecting a file starts it immediately and loops indefinitely (`cnt: 0`). Selecting it again via an action restarts it.
-- Buttons: Blackout, Freeze outputs, Return to live input, Pause, Resume, Restart current mode, Previous/Next playlist item, Refresh Showtime files.
+- Separate **Play**, **Pause**, **Previous** and **Next** playback buttons with matching icons. Play resumes an existing file playback; choose a Showtime file to start a scene. Previous and Next navigate playlist items, not the file browser. Existing button unique IDs are preserved, including the former Resume button.
+- Other buttons: Blackout, Freeze outputs, Return to live input, Restart current mode, Refresh Showtime files.
+- **Aux N intensity** faders (0–100%) appear for auxiliary ports configured as DMX Output. Adjusting a fader takes priority over live intensity for that auxiliary output without changing pixel brightness or playback mode. Values reflect the currently controlling intensity. The integration detects newly enabled DMX outputs while polling; previously added faders become unavailable when their port is changed to input or disabled.
 - Sensors: temperature, CPU usage, input/output frame rate, operating mode, playback filename, input bank voltages, and supported per-output currents, voltages and power status.
 - Binary sensors: playback error and playback paused.
 - Status and measurements refresh every 10 seconds; the file list refreshes every 60 seconds. Commands request an immediate refresh. Disconnected controllers become unavailable and polling retries automatically.
@@ -37,7 +39,7 @@ Transitions are specified in seconds using standard HA light actions and sent in
 
 Light and palette selection never write controller configuration. Palette colours are shown as Preset 1 through Preset 12 because the API stores values without names; the selector's `colours_16bit` attribute lists the values. Palette selection can interrupt recorded playback but cannot recolour the recorded scene itself.
 
-On upgrading from 0.1.0, replace the integration directory with the new version and restart HA. Existing device/entity IDs remain stable; the light and two selectors are added automatically.
+On upgrading from an earlier version, replace the integration directory with the new version and restart HA. Existing device/entity IDs remain stable; new controls are added automatically. The setup user labels are Administrator and Operator; the API values remain `admin` and `oper`, so existing entries need no migration. Previously customised entity names remain as you set them.
 
 Missing microSD cards do not prevent monitoring. File lists may remain cached during recording or formatting. New files appear automatically; use Refresh Showtime files to request an earlier refresh. The file sensor shows the selected top-level playlist/scene, not the current child item in a playlist.
 

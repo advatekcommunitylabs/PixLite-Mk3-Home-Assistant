@@ -6,11 +6,11 @@ CONTROLS = [
     ("blank", "Blackout", "modePlayback", {"op": "Blank"}),
     ("freeze", "Freeze outputs", "modePlayback", {"op": "Freeze"}),
     ("live", "Return to live input", "modeLive", None),
-    ("pause", "Pause playback", "playbackCtrl", {"op": "Paus"}),
-    ("resume", "Resume playback", "playbackCtrl", {"op": "Play"}),
+    ("pause", "Pause", "playbackCtrl", {"op": "Paus"}),
+    ("resume", "Play", "playbackCtrl", {"op": "Play"}),
     ("restart", "Restart current mode", "modeCtrl", {"op": "Rst"}),
-    ("next", "Next playlist item", "playbackCtrl", {"op": "Nxt"}),
-    ("previous", "Previous playlist item", "playbackCtrl", {"op": "Prv"}),
+    ("next", "Next", "playbackCtrl", {"op": "Nxt"}),
+    ("previous", "Previous", "playbackCtrl", {"op": "Prv"}),
     ("refresh", "Refresh Showtime files", None, None),
 ]
 
@@ -23,6 +23,10 @@ class PixLiteButton(PixLiteEntity, ButtonEntity):
     def __init__(self, coordinator, key, name, command, params):
         super().__init__(coordinator, key, name)
         self.command_name, self.params = command, params
+        icons = {"resume": "mdi:play", "pause": "mdi:pause",
+                 "previous": "mdi:skip-previous", "next": "mdi:skip-next"}
+        if key in icons:
+            self._attr_icon = icons[key]
 
     async def async_press(self):
         if self.command_name is None:

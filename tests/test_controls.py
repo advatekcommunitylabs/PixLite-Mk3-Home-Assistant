@@ -30,6 +30,16 @@ def modules(monkeypatch):
     select = ModuleType("homeassistant.components.select")
     select.SelectEntity = type("SelectEntity", (), {})
     monkeypatch.setitem(sys.modules, select.__name__, select)
+    number = ModuleType("homeassistant.components.number")
+    number.NumberEntity = type("NumberEntity", (), {})
+    number.NumberMode = SimpleNamespace(SLIDER="slider")
+    monkeypatch.setitem(sys.modules, number.__name__, number)
+    button = ModuleType("homeassistant.components.button")
+    button.ButtonEntity = type("ButtonEntity", (), {})
+    monkeypatch.setitem(sys.modules, button.__name__, button)
+    core = ModuleType("homeassistant.core")
+    core.callback = lambda func: func
+    monkeypatch.setitem(sys.modules, core.__name__, core)
     exc = ModuleType("homeassistant.exceptions")
     exc.HomeAssistantError = type("HomeAssistantError", (Exception,), {})
     exc.ConfigEntryAuthFailed = type("ConfigEntryAuthFailed", (Exception,), {})
@@ -39,15 +49,26 @@ def modules(monkeypatch):
     class Base:
         def __init__(self, coordinator, key, name):
             self.coordinator = coordinator
+        @property
+        def available(self):
+            return self.coordinator.last_update_success
 
     entity.PixLiteEntity = Base
+    def value_at(data, path):
+        try:
+            for part in path.split("."):
+                data = data[int(part)] if isinstance(data, list) else data[part]
+            return data
+        except (KeyError, IndexError, TypeError, ValueError):
+            return None
+    entity.value_at = value_at
     monkeypatch.setitem(sys.modules, entity.__name__, entity)
     update = ModuleType("homeassistant.helpers.update_coordinator")
     update.DataUpdateCoordinator = type("DataUpdateCoordinator", (), {"__init__": lambda self, *a, **kw: None})
     update.UpdateFailed = type("UpdateFailed", (Exception,), {})
     monkeypatch.setitem(sys.modules, update.__name__, update)
     loaded = {name: importlib.import_module("pixlite_test." + name)
-              for name in ["controls", "light", "select", "coordinator"]}
+              for name in ["controls", "light", "select", "coordinator", "number", "button"]}
     yield SimpleNamespace(**loaded)
     for name in list(sys.modules):
         if name.startswith("pixlite_test."):
@@ -61,7 +82,7 @@ def coordinator():
         "status": {"mode": "playback", "params": {"op": "File", "file": "show.pl"},
                    "outInt": [{"out": "Pix", "progPri": "Hi", "fc": [20, 128]}]},
         "statistic": {"pixData": {"liveIntAv": True}},
-    }, commands=AsyncMock(), command=AsyncMock())
+    }, commands=AsyncMock(), command=AsyncMock(), last_update_success=True)
 
 
 @pytest.mark.asyncio
@@ -179,10 +200,83 @@ async def test_partial_command_failure_refreshes_without_retry(modules):
 @pytest.mark.asyncio
 async def test_poll_refreshes_external_palette_and_colour_type_without_sd(modules):
     config = {"pix": {"colorType": "RGBW"}, "operIf": {"pal": [[1, 2, 3, 4]], "colorRes": "16Bit"}}
-    client = SimpleNamespace(read=AsyncMock(side_effect=[{"mode": "live"}, {}, config]),
+    client = SimpleNamespace(constants={"dev": {}}, read=AsyncMock(side_effect=[{"mode": "live"}, {}, config]),
                              files=AsyncMock(side_effect=modules.coordinator.PixLiteError("No card", 14)))
     coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test"), client)
     result = await coordinator._async_update_data()
     assert result["config"] == config
     assert result["files"] == []
     assert client.read.call_args.args == ("config", ["pix.colorType", "operIf"])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("percent,factor", [(0, 0), (50, 128), (100, 255)])
+async def test_aux_slider_targets_only_correct_output(modules, coordinator, percent, factor):
+    coordinator.data["config"]["auxPort"] = {"mode": ["DMX512In", "DMX512Out"]}
+    slider = modules.number.AuxIntensity(coordinator, 2)
+    assert slider.available
+    await slider.async_set_native_value(percent)
+    coordinator.command.assert_awaited_once_with("progInt", {"item": [{"out": "Aux:2", "op": "HiSet", "fc": factor, "durMs": 0}]})
+
+
+@pytest.mark.asyncio
+async def test_aux_mode_change_blocks_commands_and_offline_availability(modules, coordinator):
+    coordinator.data["config"]["auxPort"] = {"mode": ["DMX512Out"]}
+    slider = modules.number.AuxIntensity(coordinator, 1)
+    coordinator.last_update_success = False
+    assert not slider.available
+    coordinator.last_update_success = True
+    coordinator.data["config"]["auxPort"]["mode"][0] = "DMX512In"
+    assert not slider.available
+    assert slider.native_value is None
+    with pytest.raises(Exception, match="not configured"):
+        await slider.async_set_native_value(50)
+    coordinator.command.assert_not_awaited()
+
+
+@pytest.mark.parametrize("priority,live,expected", [("Hi", True, 50), ("Lo", True, 100), ("Lo", False, 50)])
+def test_aux_reports_effective_intensity(modules, coordinator, priority, live, expected):
+    coordinator.data["config"]["auxPort"] = {"mode": ["DMX512Out"]}
+    coordinator.data["statistic"]["auxData"] = {"liveIntAv": [live]}
+    coordinator.data["status"]["outInt"].append({"out": "Aux:1", "progPri": priority, "fc": [255, 128]})
+    assert modules.number.AuxIntensity(coordinator, 1).native_value == expected
+
+
+@pytest.mark.asyncio
+async def test_aux_entities_appear_when_enabled_and_not_duplicated(modules, coordinator):
+    from unittest.mock import Mock
+    coordinator.client = SimpleNamespace(constants={"dev": {"auxPorts": 2}})
+    coordinator.async_add_listener = Mock(return_value=lambda: None)
+    coordinator.data["config"]["auxPort"] = {"mode": ["Off", "DMX512Out"]}
+    entry = SimpleNamespace(runtime_data=coordinator, async_on_unload=Mock())
+    add = Mock()
+    await modules.number.async_setup_entry(None, entry, add)
+    assert [e.port for e in add.call_args.args[0]] == [2]
+    listener = coordinator.async_add_listener.call_args.args[0]
+    coordinator.data["config"]["auxPort"]["mode"][0] = "DMX512Out"
+    listener()
+    assert [e.port for e in add.call_args.args[0]] == [1]
+    listener()
+    assert add.call_count == 2
+    entry.async_on_unload.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_discrete_transport_buttons(modules, coordinator):
+    controls = {c[1]: c for c in modules.button.CONTROLS}
+    for name, op in [("Play", "Play"), ("Pause", "Paus"), ("Previous", "Prv"), ("Next", "Nxt")]:
+        button = modules.button.PixLiteButton(coordinator, *controls[name])
+        await button.async_press()
+        coordinator.command.assert_awaited_with("playbackCtrl", {"op": op})
+    assert controls["Play"][0] == "resume"  # Existing entity unique ID stays stable.
+
+
+@pytest.mark.asyncio
+async def test_poll_requests_aux_fields_on_capable_devices(modules):
+    client = SimpleNamespace(constants={"dev": {"auxPorts": 1}},
+                             read=AsyncMock(side_effect=[{}, {}, {}]), files=AsyncMock(return_value=[]))
+    coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test"), client)
+    await coordinator._async_update_data()
+    calls = client.read.call_args_list
+    assert "auxData" in calls[1].args[1]
+    assert "auxPort.mode" in calls[2].args[1]
