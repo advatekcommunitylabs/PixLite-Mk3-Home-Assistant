@@ -1,6 +1,6 @@
 """UI setup, reconfiguration and reauthentication."""
 
-import voluptuous as vol
+import probatio
 
 from homeassistant import config_entries
 from homeassistant.helpers import selector
@@ -67,10 +67,10 @@ class PixLiteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
                 return self.async_create_entry(title=title, data=data)
             defaults.update(user_input)
-        schema = vol.Schema(
+        schema = probatio.Schema(
             {
-                vol.Required("host", default=defaults.get("host", "")): str,
-                vol.Required(
+                probatio.Required("host", default=defaults.get("host", "")): str,
+                probatio.Required(
                     "username", default=defaults.get("username", "admin")
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
@@ -81,16 +81,18 @@ class PixLiteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
-                vol.Optional(
+                probatio.Optional(
                     "password", default=defaults.get("password", "")
                 ): selector.TextSelector(
                     selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
                 ),
-                vol.Required("use_ssl", default=defaults.get("use_ssl", False)): bool,
-                vol.Optional(
+                probatio.Required(
+                    "use_ssl", default=defaults.get("use_ssl", False)
+                ): bool,
+                probatio.Optional(
                     "port",
                     **({"default": defaults["port"]} if "port" in defaults else {}),
-                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
+                ): probatio.Port(),
             }
         )
         return self.async_show_form(step_id=step, data_schema=schema, errors=errors)

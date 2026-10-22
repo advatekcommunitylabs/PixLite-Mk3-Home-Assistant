@@ -30,6 +30,8 @@ type PixLiteConfigEntry = ConfigEntry[PixLiteCoordinator]
 class PixLiteCoordinator(DataUpdateCoordinator[PixLiteData]):
     """Share one polling snapshot among the controller's sensors."""
 
+    config_entry: PixLiteConfigEntry
+
     def __init__(self, hass: HomeAssistant, entry: PixLiteConfigEntry) -> None:
         """Initialize the controller client and polling interval."""
         super().__init__(

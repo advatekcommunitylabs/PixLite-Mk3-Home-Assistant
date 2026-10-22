@@ -50,13 +50,23 @@ def prepare(output: Path, client_version: str, *, draft: bool) -> None:
     tests = output / "tests/components/advatek_pixlite"
     tests.mkdir(parents=True)
     (tests / "__init__.py").write_text('"""Tests for the PixLite integration."""\n')
-    for source in (ROOT / "core/tests").glob("*.py"):
-        (tests / source.name).write_text(
-            source.read_text().replace(
+    for source in (ROOT / "tests/components/advatek_pixlite").glob("*.py"):
+        text = (
+            source.read_text()
+            .replace(
+                "from custom_components.advatek_pixlite.api import",
+                "from advatek_pixlite_client import",
+            )
+            .replace(
                 "custom_components.advatek_pixlite",
                 "homeassistant.components.advatek_pixlite",
             )
+            .replace(
+                "from pytest_homeassistant_custom_component.common import",
+                "from tests.common import",
+            )
         )
+        (tests / source.name).write_text(text)
     (output / "READINESS.md").write_text(
         "# Contribution preparation\n\n"
         "This tree is a draft for human review. It does not assert Bronze compliance, "
