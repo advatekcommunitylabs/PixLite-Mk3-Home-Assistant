@@ -8,7 +8,7 @@ from aiohttp import web
 import pytest
 import pytest_asyncio
 
-spec = importlib.util.spec_from_file_location("pixlite_api", Path(__file__).parents[1] / "custom_components/advatek_pixlite/_client/__init__.py")
+spec = importlib.util.spec_from_file_location("pixlite_api", Path(__file__).parents[1] / "custom_components/advatek_pixlite/api.py")
 api = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(api)
 

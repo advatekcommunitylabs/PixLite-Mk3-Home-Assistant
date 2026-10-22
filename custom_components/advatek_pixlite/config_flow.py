@@ -1,18 +1,9 @@
 """UI setup, reconfiguration and reauthentication."""
-
-import probatio
-
+import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-
-from .api import (
-    InvalidAuth,
-    PixLiteClient,
-    PixLiteError,
-    UnsupportedDevice,
-    normalize_host,
-)
+from homeassistant.helpers import selector
+from .api import InvalidAuth, PixLiteClient, PixLiteError, UnsupportedDevice, normalize_host
 from .const import DOMAIN
 
 
@@ -61,38 +52,19 @@ class PixLiteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         return self.async_abort(reason="wrong_device")
                     return self.async_update_reload_and_abort(entry, data_updates=data)
                 self._abort_if_unique_id_configured()
-                title = (
-                    client.version.get("nickname")
-                    or client.constants["dev"]["prodName"]
-                )
+                title = client.version.get("nickname") or client.constants["dev"]["prodName"]
                 return self.async_create_entry(title=title, data=data)
             defaults.update(user_input)
-        schema = probatio.Schema(
-            {
-                probatio.Required("host", default=defaults.get("host", "")): str,
-                probatio.Required(
-                    "username", default=defaults.get("username", "admin")
-                ): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=[
-                            {"value": "admin", "label": "Administrator"},
-                            {"value": "oper", "label": "Operator"},
-                        ],
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                ),
-                probatio.Optional(
-                    "password", default=defaults.get("password", "")
-                ): selector.TextSelector(
-                    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
-                ),
-                probatio.Required(
-                    "use_ssl", default=defaults.get("use_ssl", False)
-                ): bool,
-                probatio.Optional(
-                    "port",
-                    **({"default": defaults["port"]} if "port" in defaults else {}),
-                ): probatio.Port(),
-            }
-        )
+        schema = vol.Schema({
+            vol.Required("host", default=defaults.get("host", "")): str,
+            vol.Required("username", default=defaults.get("username", "admin")): selector.SelectSelector(
+                selector.SelectSelectorConfig(options=[
+                    {"value": "admin", "label": "Administrator"},
+                    {"value": "oper", "label": "Operator"},
+                ], mode=selector.SelectSelectorMode.DROPDOWN)),
+            vol.Optional("password", default=defaults.get("password", "")): selector.TextSelector(
+                selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)),
+            vol.Required("use_ssl", default=defaults.get("use_ssl", False)): bool,
+            vol.Optional("port", **({"default": defaults["port"]} if "port" in defaults else {})): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
+        })
         return self.async_show_form(step_id=step, data_schema=schema, errors=errors)

@@ -10,7 +10,7 @@ Local custom integration, version 0.4.1. Add one entry per controller; controlle
 4. Enter the controller IP address/hostname, user (Administrator or enabled Operator) and password. An empty password is supported. HTTP defaults to 80; HTTPS defaults to 4443. Leave the optional port blank for these defaults.
 5. Repeat for each additional controller. Assign each device a useful name and area.
 
-Requires a controller advertising API **v1.9** and a modern Home Assistant installation supporting config entry `runtime_data`. This preparation targets Home Assistant 2026.10.2 and Python 3.14.2 or later. Earlier Home Assistant versions are not a verified compatibility target. See CONTRIBUTING.md for the Linux runtime test procedure and Core contribution preparation. Use **Reconfigure** on the integration entry after an IP address or password change. A replacement controller with a different MAC should be added separately.
+Requires a controller advertising API **v1.9** and a modern Home Assistant installation supporting config entry `runtime_data`. Intended baseline: Home Assistant 2025.1 or later; full HA runtime compatibility has not yet been verified. Use **Reconfigure** on the integration entry after an IP address or password change. A replacement controller with a different MAC should be added separately.
 
 ## Controls and monitoring
 
@@ -21,7 +21,7 @@ Requires a controller advertising API **v1.9** and a modern Home Assistant insta
 - Separate **Play**, **Pause**, **Previous** and **Next** playback buttons with matching icons. Play resumes an existing file playback; choose a Showtime file to start a scene. Previous and Next navigate playlist items, not the file browser. Existing button unique IDs are preserved, including the former Resume button.
 - Other buttons: Blank, Freeze, Live Data, Restart current mode, Refresh Showtime files.
 - **Aux N intensity** faders (0–100%) appear for auxiliary ports configured as DMX Output. Adjusting a fader takes priority over live intensity for that auxiliary output without changing pixel brightness or playback mode. Values reflect the currently controlling intensity. The integration detects newly enabled DMX outputs while polling; previously added faders become unavailable when their port is changed to input or disabled.
-- The device exposes controller health as diagnostics, with temperature, bank input voltages and output power status enabled by default for new entries. CPU usage, frame rates, per-output current/voltage and duplicate playback detail sensors are available to enable. Mode remains a primary sensor. Existing registry names and enabled states are preserved. See docs/sensor-organization.md for the full layout.
+- The device Sensors section shows temperature, CPU usage, input/output frame rate, input bank voltages, and supported per-output currents, voltages and power status. Operating mode and playback status remain diagnostic sensors.
 - Binary sensors: playback error and playback paused.
 - Status and measurements refresh every 10 seconds; the file list refreshes every 60 seconds. Commands request an immediate refresh. Disconnected controllers become unavailable and polling retries automatically.
 
@@ -125,18 +125,14 @@ This implementation uses HTTP polling; Advatek recommends WebSockets for push up
 
 ```sh
 python -m pip install aiohttp pytest pytest-asyncio
-python -m pytest tests/test_api.py tests/test_controls.py -q
+python -m pytest tests -q
 python -m compileall -q custom_components
 ```
 
-Before relying on automations, test one controller: add it, compare readings with its UI, start a known scene, dim it, turn the light off/on, pick a solid colour and palette preset, check live intensity priority, pause/resume, blackout, restore live mode, unplug/reconnect the network, and test a second controller independently. Test missing SD media, credential changes and DHCP changes as well. Physical hardware and an interactive installation remain unverified. Linux tests exercise actual Home Assistant interfaces with a simulated controller; check the current PR results before relying on this branch.
+Before relying on automations, test one controller: add it, compare readings with its UI, start a known scene, dim it, turn the light off/on, pick a solid colour and palette preset, check live intensity priority, pause/resume, blackout, restore live mode, unplug/reconnect the network, and test a second controller independently. Test missing SD media, credential changes and DHCP changes as well. These changes have not yet been tested on physical hardware or in a running HA instance.
 
 ## References
 
 Implemented from the supplied **PixLite Mk3 API v1.9, V20260617**, especially sections 4, 6, 7.2, 7.7-7.9, 7.13-7.15. The PDF is not redistributed.
 
 Home Assistant developer references: [config flows](https://contributors.home-assistant.io/core/integrations/config-flow/), [coordinated polling](https://contributors.home-assistant.io/core/integrations/fetching-data/), and [select entities](https://contributors.home-assistant.io/core/entities/select/).
-
-## Core contribution preparation
-
-The `core/` source and `script/prepare_core.py` prepare a sensor-only first contribution with the `homeassistant/components` and `tests/components` layout. The existing custom integration retains all seven platforms. The protocol client can be built independently as `advatek-pixlite-client`; it is not published or release-approved. See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution requirements, Linux tests, dependency licensing/publication, documentation/branding work, and required human review. This branch is preparation for review and is not ready to submit upstream.

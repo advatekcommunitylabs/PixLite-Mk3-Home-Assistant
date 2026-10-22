@@ -48,48 +48,5 @@
       "reauth_successful": "Authentication updated.",
       "reconfigure_successful": "Controller connection updated."
     }
-  },
-  "entity": {
-    "sensor": {
-      "temperature": {
-        "name": "Temperature"
-      },
-      "cpu": {
-        "name": "CPU usage"
-      },
-      "input_rate": {
-        "name": "Input frame rate"
-      },
-      "output_rate": {
-        "name": "Output frame rate"
-      },
-      "mode": {
-        "name": "Mode"
-      },
-      "file": {
-        "name": "Playback file"
-      },
-      "playlist_item": {
-        "name": "Playlist item"
-      },
-      "playlist_item_type": {
-        "name": "Playlist item type"
-      },
-      "playlist_item_file": {
-        "name": "Playlist item file"
-      },
-      "bank_voltage": {
-        "name": "Bank {channel} voltage"
-      },
-      "output_current": {
-        "name": "Output {channel} current"
-      },
-      "output_status": {
-        "name": "Output {channel} power status"
-      },
-      "output_voltage": {
-        "name": "Output {channel} voltage"
-      }
-    }
   }
 }
