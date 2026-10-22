@@ -9,6 +9,7 @@ description = "Asynchronous HTTP client for the Advatek PixLite Mk3 API"
 readme = "docs/client.md"
 requires-python = ">=3.14.2"
 dependencies = ["aiohttp>=3.14.5,<4"]
+classifiers = ["Private :: Do Not Upload"]
 
 [project.urls]
 Source = "https://github.com/advatekcommunitylabs/PixLite-Mk3-Home-Assistant"

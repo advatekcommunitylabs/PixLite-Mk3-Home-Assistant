@@ -1,15 +1,23 @@
 """Common controller entity."""
 
-from homeassistant.helpers.entity import DeviceInfo
+from typing import Any
+
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
+from .coordinator import PixLiteCoordinator
 
 
-class PixLiteEntity(CoordinatorEntity):
+class PixLiteEntity(CoordinatorEntity[PixLiteCoordinator]):
+    """Group entities under a stable controller identity."""
+
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator, key, name):
+    def __init__(
+        self, coordinator: PixLiteCoordinator, key: str, name: str | None
+    ) -> None:
+        """Initialize the controller identity and device metadata."""
         super().__init__(coordinator)
         client = coordinator.client
         self._attr_unique_id = f"{client.unique_id}_{key}"
@@ -26,7 +34,8 @@ class PixLiteEntity(CoordinatorEntity):
         )
 
 
-def value_at(data, path):
+def value_at(data: Any, path: str) -> Any:
+    """Look up an optional value in a nested controller snapshot."""
     try:
         for part in path.split("."):
             data = data[int(part)] if isinstance(data, list) else data[part]

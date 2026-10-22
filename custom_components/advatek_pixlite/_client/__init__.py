@@ -4,6 +4,7 @@ import asyncio
 import base64
 import hashlib
 import re
+from typing import Any
 
 import aiohttp
 
@@ -11,7 +12,7 @@ import aiohttp
 class PixLiteError(Exception):
     """A transport, protocol or controller error."""
 
-    def __init__(self, message, code=None):
+    def __init__(self, message: str, code: int | None = None) -> None:
         super().__init__(message)
         self.code = code
 
@@ -24,7 +25,7 @@ class UnsupportedDevice(PixLiteError):
     """Not a supported Mk3 API."""
 
 
-def password_hash(password):
+def password_hash(password: str) -> str:
     return (
         base64.urlsafe_b64encode(hashlib.sha256(password.encode()).digest())
         .decode()
@@ -32,7 +33,7 @@ def password_hash(password):
     )
 
 
-def normalize_host(host):
+def normalize_host(host: str) -> str:
     host = host.strip().lower()
     if not re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?", host):
         raise ValueError("Enter an IPv4 address or hostname without a URL or port")
@@ -41,16 +42,24 @@ def normalize_host(host):
 
 class PixLiteClient:
     def __init__(
-        self, session, host, username="admin", password="", use_ssl=False, port=None
-    ):
+        self,
+        session: aiohttp.ClientSession,
+        host: str,
+        username: str = "admin",
+        password: str = "",
+        use_ssl: bool = False,
+        port: int | None = None,
+    ) -> None:
         self.session = session
         self.base_url = f"{'https' if use_ssl else 'http'}://{normalize_host(host)}:{port or (4443 if use_ssl else 80)}"
         self.auth = {"user": username, "auth": password_hash(password)}
         self.lock = asyncio.Lock()
-        self.version = {}
-        self.constants = {}
+        self.version: dict[str, Any] = {}
+        self.constants: dict[str, Any] = {}
 
-    async def _exchange(self, method, path, body=None):
+    async def _exchange(
+        self, method: str, path: str, body: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         # One outstanding request per controller, including UI actions and polling.
         async with self.lock:
             try:
@@ -87,20 +96,24 @@ class PixLiteClient:
             raise PixLiteError("Invalid result object")
         return result
 
-    async def request(self, name, params=None):
+    async def request(
+        self, name: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         body = {"req": name}  # req must be the first JSON member.
         if params is not None:
             body["params"] = params
         return await self._exchange("POST", "/v1.9/", body)
 
-    async def read(self, object_name, paths=None):
+    async def read(
+        self, object_name: str, paths: list[str] | None = None
+    ) -> dict[str, Any]:
         result = await self.request(object_name + "Read", {"path": paths or [""]})
         value = result.get(object_name)
         if not isinstance(value, dict):
             raise PixLiteError(f"Missing {object_name} object")
         return value
 
-    async def initialize(self):
+    async def initialize(self) -> dict[str, Any]:
         self.version = await self._exchange("GET", "/ver")
         versions = self.version.get("apiVer", [])
         if not any(
@@ -117,12 +130,12 @@ class PixLiteClient:
         return self.constants
 
     @property
-    def unique_id(self):
+    def unique_id(self) -> str:
         return (
             self.constants["dev"]["macAddr"].replace("-", "").replace(":", "").lower()
         )
 
-    async def files(self):
+    async def files(self) -> list[str]:
         result = await self.request("fileList", {"pattern": ["*.scn", "*.pl"]})
         files = result.get("files")
         if not isinstance(files, list):

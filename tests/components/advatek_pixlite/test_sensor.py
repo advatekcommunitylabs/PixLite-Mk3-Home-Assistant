@@ -33,7 +33,7 @@ async def test_sensor_values(
         "sensor", "advatek_pixlite", f"aabbccddeeff_{key}"
     )
     assert entity_id is not None
-    assert hass.states[entity_id].state == expected
+    assert hass.states.get(entity_id).state == expected
 
 
 @pytest.mark.usefixtures("init_integration")
@@ -118,11 +118,11 @@ async def test_poll_failure_and_recovery(
     mock_client.read.side_effect = PixLiteError("Offline")
     await mock_config_entry.runtime_data.async_refresh()
     await hass.async_block_till_done()
-    assert hass.states[entity_id].state == "unavailable"
+    assert hass.states.get(entity_id).state == "unavailable"
     mock_client.read.side_effect = read
     await mock_config_entry.runtime_data.async_refresh()
     await hass.async_block_till_done()
-    assert hass.states[entity_id].state == "32.5"
+    assert hass.states.get(entity_id).state == "32.5"
 
 
 @pytest.mark.usefixtures("init_integration")
@@ -139,7 +139,7 @@ async def test_missing_measurement_is_unknown(
     mock_client.objects["statistic"]["dev"]["temp"]["current"] = None
     await mock_config_entry.runtime_data.async_refresh()
     await hass.async_block_till_done()
-    assert hass.states[entity_id].state == "unknown"
+    assert hass.states.get(entity_id).state == "unknown"
 
 
 async def test_existing_enabled_entity_and_custom_name_preserved(
@@ -164,4 +164,4 @@ async def test_existing_enabled_entity_and_custom_name_preserved(
     entry = entity_registry.async_get(entry.entity_id)
     assert entry.name == "My CPU"
     assert entry.disabled_by is None
-    assert hass.states[entry.entity_id].state == "7.0"
+    assert hass.states.get(entry.entity_id).state == "7.0"
