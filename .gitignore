@@ -3,3 +3,8 @@ __pycache__/
 .test-deps/
 api-reference.txt
 dist/
+build/
+*.egg-info/
+.ruff_cache/
+.coverage
+htmlcov/
