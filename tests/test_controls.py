@@ -40,6 +40,17 @@ def modules(monkeypatch):
     core = ModuleType("homeassistant.core")
     core.callback = lambda func: func
     monkeypatch.setitem(sys.modules, core.__name__, core)
+    player = ModuleType("homeassistant.components.media_player")
+    player.__path__ = []
+    player.MediaPlayerEntity = type("MediaPlayerEntity", (), {})
+    player.BrowseMedia = SimpleNamespace
+    player.MediaClass = SimpleNamespace(DIRECTORY="directory", PLAYLIST="playlist")
+    player.MediaPlayerState = SimpleNamespace(IDLE="idle", PLAYING="playing", PAUSED="paused")
+    player.MediaPlayerEntityFeature = SimpleNamespace(PLAY_MEDIA=1, BROWSE_MEDIA=2, PLAY=4, PAUSE=8, NEXT_TRACK=16, PREVIOUS_TRACK=32)
+    monkeypatch.setitem(sys.modules, player.__name__, player)
+    player_errors = ModuleType("homeassistant.components.media_player.errors")
+    player_errors.BrowseError = type("BrowseError", (Exception,), {})
+    monkeypatch.setitem(sys.modules, player_errors.__name__, player_errors)
     exc = ModuleType("homeassistant.exceptions")
     exc.HomeAssistantError = type("HomeAssistantError", (Exception,), {})
     exc.ConfigEntryAuthFailed = type("ConfigEntryAuthFailed", (Exception,), {})
@@ -68,7 +79,7 @@ def modules(monkeypatch):
     update.UpdateFailed = type("UpdateFailed", (Exception,), {})
     monkeypatch.setitem(sys.modules, update.__name__, update)
     loaded = {name: importlib.import_module("pixlite_test." + name)
-              for name in ["controls", "light", "select", "coordinator", "number", "button"]}
+              for name in ["controls", "light", "select", "coordinator", "number", "button", "media_player"]}
     yield SimpleNamespace(**loaded)
     for name in list(sys.modules):
         if name.startswith("pixlite_test."):
@@ -280,3 +291,71 @@ async def test_poll_requests_aux_fields_on_capable_devices(modules):
     calls = client.read.call_args_list
     assert "auxData" in calls[1].args[1]
     assert "auxPort.mode" in calls[2].args[1]
+
+
+@pytest.mark.asyncio
+async def test_playlist_selector_and_browser_filter_scenes(modules, coordinator):
+    coordinator.data["files"] = ["show.pl", "Rainbow.scn", "Evening.PL"]
+    select = modules.select.PlaylistSelect(coordinator, "playlist", "Playlist")
+    assert select.options == ["show.pl", "Evening.PL"]
+    assert select.current_option == "show.pl"
+    await select.async_select_option("Evening.PL")
+    coordinator.command.assert_awaited_once_with("modePlayback", {"op": "File", "file": "Evening.PL", "cnt": 0})
+    player = modules.media_player.PlaylistPlayer(coordinator)
+    tree = await player.async_browse_media()
+    assert [child.media_content_id for child in tree.children] == select.options
+    assert all(child.can_play and not child.can_expand for child in tree.children)
+    coordinator.data["files"] = []
+    assert (await player.async_browse_media()).children == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("count", [0, 1, 3, 65535])
+async def test_playlist_repeat_count_and_fade(modules, coordinator, count):
+    coordinator.data["files"] = ["show.pl"]
+    player = modules.media_player.PlaylistPlayer(coordinator)
+    await player.async_play_media("advatek_pixlite", "show.pl", extra={"repeat_count": count, "transition": 1.5})
+    coordinator.command.assert_awaited_once_with("modePlayback", {"op": "File", "file": "show.pl", "cnt": count, "fadeMs": 1500})
+    assert "durMs" not in coordinator.command.call_args.args[1]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("extra", [{"repeat_count": -1}, {"repeat_count": 65536}, {"repeat_count": True}, {"repeat_count": 1.5}, {"transition": -1}, {"transition": float("nan")}])
+async def test_invalid_playlist_options_do_not_send_commands(modules, coordinator, extra):
+    coordinator.data["files"] = ["show.pl"]
+    with pytest.raises(Exception):
+        await modules.media_player.PlaylistPlayer(coordinator).async_play_media("playlist", "show.pl", extra=extra)
+    coordinator.command.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_playlist_status_and_transport(modules, coordinator):
+    player = modules.media_player.PlaylistPlayer(coordinator)
+    coordinator.data["status"]["state"] = {"item": 2, "op": "File", "file": "Rainbow.scn", "paus": True, "timS": 42}
+    assert player.state == "paused"
+    assert player.media_title == "show.pl"
+    assert player.extra_state_attributes["item_file"] == "Rainbow.scn"
+    for method, op in [("async_media_play", "Play"), ("async_media_pause", "Paus"), ("async_media_next_track", "Nxt"), ("async_media_previous_track", "Prv")]:
+        await getattr(player, method)()
+        coordinator.command.assert_awaited_with("playbackCtrl", {"op": op})
+    coordinator.data["status"]["state"] = {"item": 3, "op": "Color", "color": [65535, 0, 0]}
+    assert player.state == "playing"
+    assert player.extra_state_attributes["item_file"] is None
+    coordinator.data["status"] = {"mode": "live"}
+    assert player.state == "idle"
+    assert player.media_title is None
+    assert player.extra_state_attributes == {}
+    with pytest.raises(Exception, match="Select a Showtime playlist"):
+        await player.async_media_next_track()
+
+
+@pytest.mark.asyncio
+async def test_playlist_rejects_unknown_files_and_queueing(modules, coordinator):
+    coordinator.data["files"] = ["show.pl", "scene.scn"]
+    player = modules.media_player.PlaylistPlayer(coordinator)
+    for file in ["missing.pl", "scene.scn", "https://example.com/show.pl"]:
+        with pytest.raises(Exception, match="stored on this controller"):
+            await player.async_play_media("playlist", file)
+    with pytest.raises(Exception, match="not supported"):
+        await player.async_play_media("playlist", "show.pl", enqueue="add")
+    coordinator.command.assert_not_awaited()

@@ -8,6 +8,7 @@ from .controls import color_params, palette, pixel_intensity, solid_color
 async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities([
         ShowtimeSelect(entry.runtime_data, "showtime", "Showtime file"),
+        PlaylistSelect(entry.runtime_data, "playlist", "Showtime playlist"),
         PaletteSelect(entry.runtime_data, "palette", "Showtime colour preset"),
         IntensityPrioritySelect(entry.runtime_data, "intensity_priority", "Intensity priority"),
     ])
@@ -30,6 +31,14 @@ class ShowtimeSelect(PixLiteEntity, SelectEntity):
         if option not in self.options:
             raise HomeAssistantError("File is no longer available; refresh the file list")
         await self.coordinator.command("modePlayback", {"op": "File", "file": option, "cnt": 0})
+
+
+class PlaylistSelect(ShowtimeSelect):
+    _attr_icon = "mdi:playlist-play"
+
+    @property
+    def options(self):
+        return [file for file in super().options if file.lower().endswith(".pl")]
 
 
 class PaletteSelect(PixLiteEntity, SelectEntity):

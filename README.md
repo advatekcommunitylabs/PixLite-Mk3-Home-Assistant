@@ -1,6 +1,6 @@
 # Advatek PixLite Mk3 for Home Assistant
 
-Local custom integration, version 0.3.1. Add one entry per controller; controllers have independent connections and polling. Device and entity IDs use the controller MAC address, so names and IP addresses can change without creating new entities.
+Local custom integration, version 0.4.0. Add one entry per controller; controllers have independent connections and polling. Device and entity IDs use the controller MAC address, so names and IP addresses can change without creating new entities.
 
 ## Install
 
@@ -84,6 +84,34 @@ data:
   brightness_pct: 60
   transition: 1
 ```
+
+## Showtime playlists
+
+Playlists already stored as `.pl` files on the controller are supported in three places:
+
+- **Showtime playlist** is a playlist-only dropdown. Selecting a playlist starts it immediately and repeats continuously. The original Showtime file selector remains available for existing automations.
+- **Showtime playlist player** is a Home Assistant media player entity with a browser for stored playlists, Play/Pause and Previous/Next controls. It represents lighting playback, not audio, and has no volume control.
+- **Playlist item**, **Playlist item type**, and **Playlist item file** sensors expose the current item. The player also has attributes for the item colour, elapsed playback seconds, repeat count and playback error code. Item position is reported exactly as supplied by the controller. The item filename is unknown for colour/blank/freeze items.
+
+The player follows playlists started externally in Showtime too. Status refreshes every 10 seconds; the file browser refreshes every 60 seconds or using Refresh Showtime files. A missing SD card produces an empty browser. It may take the next status poll for the controller to report the first playlist item after starting playback.
+
+Play resumes an active playlist; use the browser or dropdown to start one. Previous/Next navigate items within that playlist. No seek, shuffle, queue editing, playlist creation/uploads, or synchronized multi-controller playback is exposed. Use Blank or Live Data to leave playlist playback. A playlist error is represented by an idle player plus the existing Playback error binary sensor and error-code attribute.
+
+For a finite number of repeats and a fade into the playlist, use this action with your actual player entity and filename:
+
+```yaml
+action: media_player.play_media
+target:
+  entity_id: media_player.garden_pixlite_showtime_playlist_player
+data:
+  media_content_type: advatek_pixlite
+  media_content_id: "Evening.pl"
+  extra:
+    repeat_count: 1
+    transition: 2
+```
+
+`repeat_count` accepts 0–65535; 0 (the default) loops forever. `transition` is the entry fade in seconds; it does not replace per-item fades authored in Showtime. The API does not allow a duration limit for playlist playback. When a finite playlist completes, the controller handles its normal transient-mode return behaviour. This integration does not promise to resume an arbitrary interrupted playlist at its former position.
 
 ## Transport and scope
 

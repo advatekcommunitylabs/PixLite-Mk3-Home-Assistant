@@ -13,6 +13,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
         ("input_rate", "Input frame rate", "statistic.pixData.inFrmRate", "Hz", SensorDeviceClass.FREQUENCY, 1),
         ("mode", "Mode", "status.mode", None, None, 1),
         ("file", "Playback file", "status.params.file", None, None, 1),
+        ("playlist_item", "Playlist item", "status.state.item", None, None, 1),
+        ("playlist_item_type", "Playlist item type", "status.state.op", None, None, 1),
+        ("playlist_item_file", "Playlist item file", "status.state.file", None, None, 1),
     ]
     dev = c.client.constants["dev"]
     for i in range(dev.get("pwrBanksIn", 0)):
