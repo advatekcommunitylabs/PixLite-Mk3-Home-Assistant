@@ -11,11 +11,14 @@ from homeassistant.components.light import (
 )
 
 from .controls import (
+    color_channel_count,
     color_params,
     effective_brightness,
     intensity_params,
+    require_color_channels,
     solid_color,
     transition_ms,
+    validate_color,
 )
 from .entity import PixLiteEntity
 
@@ -33,9 +36,11 @@ class PixLiteLight(PixLiteEntity, LightEntity):
 
     @property
     def color_mode(self):
-        kind = self.coordinator.data["config"].get("pix", {}).get("colorType", "RGB")
-        # X is not necessarily a second white channel; never advertise RGBWW.
-        return ColorMode.RGB if kind == "RGB" else ColorMode.RGBW
+        count = color_channel_count(self.coordinator.data)
+        if count is None:
+            return ColorMode.BRIGHTNESS
+        # X has no defined warm/cold meaning in the controller API.
+        return ColorMode.RGB if count == 3 else ColorMode.RGBW
 
     @property
     def supported_color_modes(self):
@@ -84,17 +89,51 @@ class PixLiteLight(PixLiteEntity, LightEntity):
     async def async_turn_on(self, **kwargs):
         duration = transition_ms(kwargs.get(ATTR_TRANSITION, 0))
         requested = kwargs.get(ATTR_RGBW_COLOR, kwargs.get(ATTR_RGB_COLOR))
-        commands = []
+        brightness = kwargs.get(ATTR_BRIGHTNESS)
         if requested is not None:
-            color = tuple(v * 257 for v in requested)
-            kind = (
-                self.coordinator.data["config"].get("pix", {}).get("colorType", "RGB")
-            )
-            if kind == "RGBWX":
-                previous = solid_color(self.coordinator.data)
-                x = previous[4] if previous and len(previous) == 5 else 0
-                color = (color + (0, 0, 0, 0))[:4] + (x,)
-            commands.append(("modePlayback", color_params(color, duration)))
+
+            def build_color(data):
+                count = require_color_channels(data)
+                expected = 4 if ATTR_RGBW_COLOR in kwargs else 3
+                if (
+                    expected != min(count, 4)
+                    or len(requested) != expected
+                    or any(
+                        type(value) is not int or not 0 <= value <= 255
+                        for value in requested
+                    )
+                ):
+                    raise ValueError(
+                        "Picker colour does not match the configured pixel channels"
+                    )
+                color = tuple(value * 257 for value in requested)
+                if count == 5:
+                    previous = solid_color(data)
+                    if (
+                        previous is None
+                        and (data["status"].get("params") or {}).get("op") == "Color"
+                    ):
+                        raise ValueError(
+                            "Current solid colour is unavailable; X cannot be preserved"
+                        )
+                    color += (previous[4] if previous is not None else 0,)
+                return [
+                    (
+                        "modePlayback",
+                        color_params(validate_color(data, color), duration),
+                    ),
+                    (
+                        "progInt",
+                        intensity_params(
+                            brightness
+                            if brightness is not None
+                            else effective_brightness(data) or self.last_brightness,
+                            duration,
+                        ),
+                    ),
+                ]
+
+            await self.coordinator.color_commands(build_color)
         elif ATTR_BRIGHTNESS not in kwargs:
             # A bare On after the separate Blackout button needs a visible mode.
             status = self.coordinator.data["status"]
@@ -102,16 +141,48 @@ class PixLiteLight(PixLiteEntity, LightEntity):
             if (status.get("params") or {}).get("op") == "Blank" or (
                 color is not None and not any(color)
             ):
-                commands.append(
-                    ("modePlayback", color_params((65535, 65535, 65535), duration))
+
+                def restore_color(data):
+                    status = data["status"]
+                    current = solid_color(data)
+                    commands = []
+                    if (status.get("params") or {}).get("op") == "Blank" or (
+                        current is not None and not any(current)
+                    ):
+                        count = require_color_channels(data)
+                        color = (65535, 65535, 65535) + (0,) * (count - 3)
+                        commands.append(("modePlayback", color_params(color, duration)))
+                    commands.append(
+                        (
+                            "progInt",
+                            intensity_params(
+                                effective_brightness(data) or self.last_brightness,
+                                duration,
+                            ),
+                        )
+                    )
+                    return commands
+
+                await self.coordinator.color_commands(restore_color)
+            else:
+                await self.coordinator.commands(
+                    [
+                        (
+                            "progInt",
+                            intensity_params(
+                                self.brightness or self.last_brightness, duration
+                            ),
+                        )
+                    ]
                 )
-        brightness = kwargs.get(ATTR_BRIGHTNESS)
-        if brightness is None:
-            brightness = self.brightness or self.last_brightness
-        commands.append(("progInt", intensity_params(brightness, duration)))
-        await self.coordinator.commands(commands)
+        else:
+            await self.coordinator.commands(
+                [("progInt", intensity_params(brightness, duration))]
+            )
         if brightness:
             self.last_brightness = brightness
+        elif brightness is None and self.brightness:
+            self.last_brightness = self.brightness
 
     async def async_turn_off(self, **kwargs):
         if self.brightness:

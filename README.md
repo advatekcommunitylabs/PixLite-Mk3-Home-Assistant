@@ -33,7 +33,9 @@ The light controls the **pixel outputs together**, not individual pixel ports or
 
 Turning the light off sets programmed intensity to zero and keeps playback running. Turning it on restores the last non-zero brightness remembered during this HA session (255 after a reload if no prior value is known). Selecting a colour replaces the current scene/live mode with a continuous solid colour. The separate Blank button enters a blank playback mode; a light On without a brightness or colour value after Blank starts white solid-colour playback. A brightness-only command preserves even a blank mode.
 
-RGB pixels expose an RGB picker; RGBW pixels expose RGBW. RGBWX pixels expose RGBW and preserve the X channel from an existing solid colour, or use X=0 when switching from other modes. X is not assumed to be warm/cold white. Native RGBCCT temperature control and independent X editing are not implemented; see [colour coverage and follow-up requirements](docs/colour-model.md). Palette presets preserve all five channels and their original 8/16-bit values. The picker sends 8-bit HA colour values scaled to 16-bit; arbitrary 16-bit picker precision and separate X editing are not exposed.
+RGB pixels expose an RGB picker; RGBW pixels expose RGBW. RGBWX pixels expose RGBW and preserve the X channel from an existing solid colour, or use X=0 when switching from other modes. Optional **Solid colour W** and **Solid colour X** number entities provide independent raw 16-bit editing on supported controllers. Enable them in the entity settings. They are available during valid solid-colour playback and preserve the other channels and master intensity. Start a solid colour with the picker or a palette preset before editing W/X. X is not assumed to be warm/cold white; native RGBCCT temperature control is not implemented. See [colour coverage and verification requirements](docs/colour-model.md).
+
+Palette presets preserve all configured channels and their original 8/16-bit values. The picker sends 8-bit HA colour values scaled to 16-bit. Each colour write rereads the controller's colour type and status under the command lock. Missing or unsupported colour types block picker, preset and blank-to-colour writes, while brightness-only control remains available. Invalid channel vectors are rejected. These checks do not resolve the controller identity issue tracked in PR #1.
 
 Transitions are specified in seconds using standard HA light actions and sent in milliseconds. A colour-and-brightness action sends colour playback followed by intensity; these commands are serialized with other actions and polling. They are not an atomic controller transaction. A failure refreshes state to reflect any partially applied change. Status updates reflect controller polling rather than optimistic animation in HA.
 
@@ -122,6 +124,13 @@ This implementation uses HTTP polling; Advatek recommends WebSockets for push up
 ## Validation
 
 `tests/test_api.py` runs the actual aiohttp client against a local HTTP simulator. It checks authentication encoding, version gating, endpoint/message formatting, serialization, file enumeration, result-less responses, and HTTP/API failures. `tests/test_controls.py` tests light/palette/priority behaviour and compound-command handling using lightweight HA interface doubles. These tests do not boot Home Assistant or substitute for hardware testing.
+
+`tests/test_colour_contract.py` exercises real Home Assistant light/number service handlers, entity registries and state publication against an in-memory controller. It does not test a complete integration setup or physical output. With the Home Assistant dependencies installed, run it locally without the Linux-specific custom-component pytest plugin:
+
+```powershell
+$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD = '1'
+python -m pytest -p pytest_asyncio.plugin tests/test_colour_contract.py -q
+```
 
 ```sh
 python -m pip install aiohttp pytest pytest-asyncio

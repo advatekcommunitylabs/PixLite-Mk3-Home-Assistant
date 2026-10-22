@@ -50,6 +50,14 @@
     }
   },
   "entity": {
+    "number": {
+      "solid_color_w": {
+        "name": "Solid colour W"
+      },
+      "solid_color_x": {
+        "name": "Solid colour X"
+      }
+    },
     "sensor": {
       "temperature": {
         "name": "Temperature"

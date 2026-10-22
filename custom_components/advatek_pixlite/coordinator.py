@@ -62,6 +62,20 @@ class PixLiteCoordinator(DataUpdateCoordinator):
     async def command(self, name, params=None):
         await self.commands([(name, params)])
 
+    async def color_commands(self, build_commands):
+        """Build colour changes from fresh configuration and status under the lock."""
+        try:
+            async with self.control_lock:
+                config = await self.client.read("config", ["pix.colorType", "operIf"])
+                status = await self.client.read("status")
+                snapshot = {**self.data, "config": config, "status": status}
+                for name, params in build_commands(snapshot):
+                    await self.client.request(name, params)
+        except (PixLiteError, ValueError) as err:
+            await self.async_request_refresh()
+            raise HomeAssistantError(str(err)) from err
+        await self.async_request_refresh()
+
     async def commands(self, commands):
         """Keep multi-request light actions together; do not retry output changes."""
         try:

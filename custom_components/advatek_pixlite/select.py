@@ -3,7 +3,14 @@
 from homeassistant.components.select import SelectEntity
 from homeassistant.exceptions import HomeAssistantError
 
-from .controls import color_params, palette, pixel_intensity, solid_color
+from .controls import (
+    color_params,
+    palette,
+    pixel_intensity,
+    require_color_channels,
+    solid_color,
+    validate_color,
+)
 from .entity import PixLiteEntity
 
 
@@ -77,11 +84,17 @@ class PaletteSelect(PixLiteEntity, SelectEntity):
         }
 
     async def async_select_option(self, option):
-        if option not in self.options:
-            raise HomeAssistantError("Colour preset is no longer available")
-        color = palette(self.coordinator.data)[self.options.index(option)]
-        fade = self.coordinator.data["config"].get("operIf", {}).get("fadeMs", 0)
-        await self.coordinator.command("modePlayback", color_params(color, fade))
+        def build_color(data):
+            require_color_channels(data)
+            colors = palette(data)
+            options = [f"Preset {i + 1}" for i in range(len(colors))]
+            if option not in options:
+                raise ValueError("Colour preset is no longer available")
+            color = validate_color(data, colors[options.index(option)])
+            fade = data["config"].get("operIf", {}).get("fadeMs", 0)
+            return [("modePlayback", color_params(color, fade))]
+
+        await self.coordinator.color_commands(build_color)
 
 
 class IntensityPrioritySelect(PixLiteEntity, SelectEntity):
