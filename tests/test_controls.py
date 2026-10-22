@@ -359,3 +359,27 @@ async def test_playlist_rejects_unknown_files_and_queueing(modules, coordinator)
     with pytest.raises(Exception, match="not supported"):
         await player.async_play_media("playlist", "show.pl", enqueue="add")
     coordinator.command.assert_not_awaited()
+
+
+@pytest.mark.parametrize("kind,expected", [("RGB", "rgb"), ("RGBW", "rgbw"), ("RGBWX", "rgbw")])
+def test_colour_mode_follows_controller_selection(modules, coordinator, kind, expected):
+    coordinator.data["config"]["pix"]["colorType"] = kind
+    light = modules.light.PixLiteLight(coordinator)
+    assert light.supported_color_modes == {expected}
+    assert light.color_mode == expected
+
+
+@pytest.mark.asyncio
+async def test_rgbw_picker_retains_four_channels(modules, coordinator):
+    coordinator.data["config"]["pix"]["colorType"] = "RGBW"
+    light = modules.light.PixLiteLight(coordinator)
+    await light.async_turn_on(rgbw_color=(1, 2, 3, 255))
+    assert coordinator.commands.call_args.args[0][0][1]["color"] == [257, 514, 771, 65535]
+
+
+@pytest.mark.asyncio
+async def test_rgbwx_from_file_starts_with_zero_x(modules, coordinator):
+    coordinator.data["config"]["pix"]["colorType"] = "RGBWX"
+    light = modules.light.PixLiteLight(coordinator)
+    await light.async_turn_on(rgbw_color=(1, 2, 3, 4))
+    assert coordinator.commands.call_args.args[0][0][1]["color"] == [257, 514, 771, 1028, 0]
