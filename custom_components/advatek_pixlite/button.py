@@ -3,9 +3,9 @@ from homeassistant.components.button import ButtonEntity
 from .entity import PixLiteEntity
 
 CONTROLS = [
-    ("blank", "Blackout", "modePlayback", {"op": "Blank"}),
-    ("freeze", "Freeze outputs", "modePlayback", {"op": "Freeze"}),
-    ("live", "Return to live input", "modeLive", None),
+    ("blank", "Blank", "modePlayback", {"op": "Blank"}),
+    ("freeze", "Freeze", "modePlayback", {"op": "Freeze"}),
+    ("live", "Live Data", "modeLive", None),
     ("pause", "Pause", "playbackCtrl", {"op": "Paus"}),
     ("resume", "Play", "playbackCtrl", {"op": "Play"}),
     ("restart", "Restart current mode", "modeCtrl", {"op": "Rst"}),

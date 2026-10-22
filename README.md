@@ -1,6 +1,6 @@
 # Advatek PixLite Mk3 for Home Assistant
 
-Local custom integration, version 0.3.0. Add one entry per controller; controllers have independent connections and polling. Device and entity IDs use the controller MAC address, so names and IP addresses can change without creating new entities.
+Local custom integration, version 0.3.1. Add one entry per controller; controllers have independent connections and polling. Device and entity IDs use the controller MAC address, so names and IP addresses can change without creating new entities.
 
 ## Install
 
@@ -19,19 +19,19 @@ Requires a controller advertising API **v1.9** and a modern Home Assistant insta
 - **Intensity priority** selects Override live intensity or Yield to live intensity. Explicit light on/off/brightness commands take priority again. Yield allows incoming live intensity to win when available; otherwise the programmed factor applies.
 - **Showtime file** select lists `.scn` scenes and `.pl` playlists on the microSD card. Selecting a file starts it immediately and loops indefinitely (`cnt: 0`). Selecting it again via an action restarts it.
 - Separate **Play**, **Pause**, **Previous** and **Next** playback buttons with matching icons. Play resumes an existing file playback; choose a Showtime file to start a scene. Previous and Next navigate playlist items, not the file browser. Existing button unique IDs are preserved, including the former Resume button.
-- Other buttons: Blackout, Freeze outputs, Return to live input, Restart current mode, Refresh Showtime files.
+- Other buttons: Blank, Freeze, Live Data, Restart current mode, Refresh Showtime files.
 - **Aux N intensity** faders (0–100%) appear for auxiliary ports configured as DMX Output. Adjusting a fader takes priority over live intensity for that auxiliary output without changing pixel brightness or playback mode. Values reflect the currently controlling intensity. The integration detects newly enabled DMX outputs while polling; previously added faders become unavailable when their port is changed to input or disabled.
 - Sensors: temperature, CPU usage, input/output frame rate, operating mode, playback filename, input bank voltages, and supported per-output currents, voltages and power status.
 - Binary sensors: playback error and playback paused.
 - Status and measurements refresh every 10 seconds; the file list refreshes every 60 seconds. Commands request an immediate refresh. Disconnected controllers become unavailable and polling retries automatically.
 
-Blackout blanks the controller outputs; it does not remove electrical power. Return to live input restores configured streaming input. Pause/Resume require an applicable file playback, and Previous/Next require a playlist; invalid commands return a controller error. Restart current mode can also restart recording if recording is active. The API's `Stop` only exits transient modes and is deliberately not presented as a universal stop button.
+Blank blanks the controller outputs; it does not remove electrical power. Live Data restores configured streaming input. Pause/Resume require an applicable file playback, and Previous/Next require a playlist; invalid commands return a controller error. Restart current mode can also restart recording if recording is active. The API's `Stop` only exits transient modes and is deliberately not presented as a universal stop button.
 
 ### Light behaviour
 
 The light controls the **pixel outputs together**, not individual pixel ports or auxiliary DMX outputs. Its brightness is the effective master scaling factor, not a measurement of emitted light. Live input can contain black pixels even when the light reports on.
 
-Turning the light off sets programmed intensity to zero and keeps playback running. Turning it on restores the last non-zero brightness remembered during this HA session (255 after a reload if no prior value is known). Selecting a colour replaces the current scene/live mode with a continuous solid colour. The separate Blackout button enters a blank playback mode; a light On without a brightness or colour value after Blackout starts white solid-colour playback. A brightness-only command preserves even a blank mode.
+Turning the light off sets programmed intensity to zero and keeps playback running. Turning it on restores the last non-zero brightness remembered during this HA session (255 after a reload if no prior value is known). Selecting a colour replaces the current scene/live mode with a continuous solid colour. The separate Blank button enters a blank playback mode; a light On without a brightness or colour value after Blank starts white solid-colour playback. A brightness-only command preserves even a blank mode.
 
 RGB pixels expose an RGB picker; RGBW pixels expose RGBW. RGBWX pixels expose RGBW and preserve the X channel from an existing solid colour, or use X=0 when switching from other modes. X is not assumed to be warm/cold white. Palette presets preserve all five channels and their original 8/16-bit values. The picker sends 8-bit HA colour values scaled to 16-bit; arbitrary 16-bit picker precision and separate X editing are not exposed.
 
