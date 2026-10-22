@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "advatek-pixlite-client"
+version = "0.1.0"
+description = "Asynchronous HTTP client for the Advatek PixLite Mk3 API"
+readme = "docs/client.md"
+requires-python = ">=3.14.2"
+dependencies = ["aiohttp>=3.14.5,<4"]
+
+[project.urls]
+Source = "https://github.com/advatekcommunitylabs/PixLite-Mk3-Home-Assistant"
+Issues = "https://github.com/advatekcommunitylabs/PixLite-Mk3-Home-Assistant/issues"
+
+[tool.setuptools]
+packages = ["advatek_pixlite_client"]
+package-dir = {advatek_pixlite_client = "custom_components/advatek_pixlite/_client"}
+
+[tool.setuptools.package-data]
+advatek_pixlite_client = ["py.typed"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+known-first-party = ["homeassistant"]
+combine-as-imports = true
+split-on-trailing-comma = false

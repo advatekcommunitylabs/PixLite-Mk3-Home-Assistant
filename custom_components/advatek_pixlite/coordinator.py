@@ -1,6 +1,7 @@
 """Shared polling and controller command handling."""
-from datetime import timedelta
+
 import asyncio
+from datetime import timedelta
 import logging
 import time
 
@@ -12,8 +13,13 @@ from .api import InvalidAuth, PixLiteError
 
 class PixLiteCoordinator(DataUpdateCoordinator):
     def __init__(self, hass, entry, client):
-        super().__init__(hass, logging.getLogger(__name__), name=entry.title,
-                         config_entry=entry, update_interval=timedelta(seconds=10))
+        super().__init__(
+            hass,
+            logging.getLogger(__name__),
+            name=entry.title,
+            config_entry=entry,
+            update_interval=timedelta(seconds=10),
+        )
         self.client = client
         self.files = []
         self.files_updated = 0
@@ -42,7 +48,12 @@ class PixLiteCoordinator(DataUpdateCoordinator):
                         self.files = []
                     elif err.code != 10:  # Recording/formatting can prohibit listing.
                         raise
-            return {"status": status, "statistic": stats, "files": list(self.files), "config": config}
+            return {
+                "status": status,
+                "statistic": stats,
+                "files": list(self.files),
+                "config": config,
+            }
         except InvalidAuth as err:
             raise ConfigEntryAuthFailed(str(err)) from err
         except PixLiteError as err:

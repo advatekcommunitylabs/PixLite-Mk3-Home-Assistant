@@ -6,8 +6,14 @@ def transition_ms(seconds):
 
 
 def pixel_intensity(data):
-    return next((item for item in data.get("status", {}).get("outInt", [])
-                 if item.get("out") == "Pix"), {})
+    return next(
+        (
+            item
+            for item in data.get("status", {}).get("outInt", [])
+            if item.get("out") == "Pix"
+        ),
+        {},
+    )
 
 
 def effective_brightness(data):
@@ -33,16 +39,24 @@ def solid_color(data):
 def palette(data):
     interface = data.get("config", {}).get("operIf", {})
     scale = 257 if interface.get("colorRes", "8Bit") == "8Bit" else 1
-    return [tuple(value * scale for value in color)
-            for color in interface.get("pal", [])[:12]]
+    return [
+        tuple(value * scale for value in color)
+        for color in interface.get("pal", [])[:12]
+    ]
 
 
 def intensity_params(brightness, duration=0):
     # HiSet makes explicit HA brightness/on/off commands take control from live DMX.
-    return {"item": [{"out": "Pix", "op": "HiSet", "fc": brightness,
-                       "durMs": duration}]}
+    return {
+        "item": [{"out": "Pix", "op": "HiSet", "fc": brightness, "durMs": duration}]
+    }
 
 
 def color_params(color, duration=0):
     # Field order follows Table 46; preserve all five channels for palette colours.
-    return {"op": "Color", "color": list(color), "colorRes": "16Bit", "fadeMs": duration}
+    return {
+        "op": "Color",
+        "color": list(color),
+        "colorRes": "16Bit",
+        "fadeMs": duration,
+    }
