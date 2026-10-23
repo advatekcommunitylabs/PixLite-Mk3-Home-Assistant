@@ -1,0 +1,286 @@
+title: PixLite
+views:
+- title: Controllers
+  path: controllers
+  icon: mdi:led-strip-variant
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: markdown
+      content: '## PixLite A4-S Mk3'
+    - type: light
+      entity: light.pixlite_a4_s_mk3_pixels
+      name: Pixel output
+    - type: entities
+      title: Output control
+      show_header_toggle: false
+      entities:
+      - entity: sensor.pixlite_a4_s_mk3_mode
+        name: Mode
+      - entity: select.pixlite_a4_s_mk3_intensity_priority
+        name: Intensity priority
+      - entity: number.pixlite_a4_s_mk3_aux_1_intensity
+        name: Aux 1 intensity
+  - type: vertical-stack
+    cards:
+    - type: markdown
+      content: '## PixLite E16-S Mk3'
+    - type: light
+      entity: light.pixlite_e16_s_mk3_pixels
+      name: Pixel output
+    - type: entities
+      title: Output control
+      show_header_toggle: false
+      entities:
+      - entity: sensor.pixlite_e16_s_mk3_mode
+        name: Mode
+      - entity: select.pixlite_e16_s_mk3_intensity_priority
+        name: Intensity priority
+      - entity: number.pixlite_e16_s_mk3_aux_1_intensity
+        name: Aux 1 intensity
+    - type: entities
+      title: Controller monitoring
+      show_header_toggle: false
+      entities:
+      - entity: sensor.pixlite_e16_s_mk3_temperature
+        name: Temperature
+      - entity: sensor.pixlite_e16_s_mk3_cpu_usage
+        name: CPU usage
+      - entity: sensor.pixlite_e16_s_mk3_input_frame_rate
+        name: Input frame rate
+      - entity: sensor.pixlite_e16_s_mk3_output_frame_rate
+        name: Output frame rate
+  - type: vertical-stack
+    cards:
+    - type: markdown
+      content: '## A4 monitoring'
+    - type: entities
+      title: Controller status
+      show_header_toggle: false
+      entities:
+      - entity: sensor.pixlite_a4_s_mk3_mode
+        name: Mode
+      - entity: sensor.pixlite_a4_s_mk3_temperature
+        name: Temperature
+      - entity: sensor.pixlite_a4_s_mk3_cpu_usage
+        name: CPU usage
+      - entity: sensor.pixlite_a4_s_mk3_input_frame_rate
+        name: Input frame rate
+      - entity: sensor.pixlite_a4_s_mk3_output_frame_rate
+        name: Output frame rate
+    - type: entities
+      title: Power monitoring
+      show_header_toggle: false
+      entities:
+      - entity: sensor.pixlite_a4_s_mk3_bank_1_voltage
+        name: Bank 1 voltage
+      - entity: sensor.pixlite_a4_s_mk3_output_1_current
+        name: Output 1 current
+      - entity: sensor.pixlite_a4_s_mk3_output_2_current
+        name: Output 2 current
+      - entity: sensor.pixlite_a4_s_mk3_output_3_current
+        name: Output 3 current
+      - entity: sensor.pixlite_a4_s_mk3_output_4_current
+        name: Output 4 current
+  theme: Advatek
+  show_icon_and_title: true
+- title: SHOWTime
+  path: showtime
+  icon: mdi:play-box-multiple
+  cards:
+  - type: media-control
+    entity: media_player.pixlite_a4_s_mk3_showtime_playlist_player
+  - type: entities
+    title: Scenes and playlists
+    show_header_toggle: false
+    entities:
+    - entity: select.pixlite_a4_s_mk3_showtime_scene
+      name: Showtime scene
+    - entity: select.pixlite_a4_s_mk3_showtime_playlist
+      name: Showtime playlist
+    - entity: select.pixlite_a4_s_mk3_showtime_colour_preset
+      name: Showtime colour preset
+  - type: entities
+    title: Playback controls
+    show_header_toggle: false
+    entities:
+    - entity: button.pixlite_a4_s_mk3_pause
+      name: Pause
+    - entity: button.pixlite_a4_s_mk3_play
+      name: Play
+    - entity: button.pixlite_a4_s_mk3_previous
+      name: Previous
+    - entity: button.pixlite_a4_s_mk3_next
+      name: Next
+    - entity: button.pixlite_a4_s_mk3_blank
+      name: Blank
+    - entity: button.pixlite_a4_s_mk3_freeze
+      name: Freeze
+    - entity: button.pixlite_a4_s_mk3_live_data
+      name: Live Data
+  - type: entities
+    title: Playback status
+    show_header_toggle: false
+    entities:
+    - entity: sensor.pixlite_a4_s_mk3_playback_file
+      name: Playback file
+    - entity: sensor.pixlite_a4_s_mk3_playlist_item
+      name: Playlist item
+    - entity: sensor.pixlite_a4_s_mk3_playlist_item_type
+      name: Playlist item type
+    - entity: sensor.pixlite_a4_s_mk3_playlist_item_file
+      name: Playlist item file
+    - entity: binary_sensor.pixlite_a4_s_mk3_playback_paused
+      name: Playback paused
+    - entity: binary_sensor.pixlite_a4_s_mk3_playback_error
+      name: Playback error
+  theme: Advatek
+  show_icon_and_title: true
+- title: Monitoring
+  path: monitoring
+  icon: mdi:chart-line
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: markdown
+      content: '## A4 controller'
+    - type: tile
+      entity: sensor.pixlite_a4_s_mk3_mode
+      name: Operating mode
+      tap_action:
+        action: more-info
+    - type: grid
+      columns: 2
+      square: false
+      cards:
+      - type: gauge
+        entity: sensor.pixlite_a4_s_mk3_cpu_usage
+        name: CPU usage
+        min: 0
+        max: 100
+      - type: sensor
+        entity: sensor.pixlite_a4_s_mk3_temperature
+        name: Temperature
+        graph: line
+        detail: 2
+        hours_to_show: 1
+    - type: grid
+      columns: 2
+      square: false
+      cards:
+      - type: sensor
+        entity: sensor.pixlite_a4_s_mk3_input_frame_rate
+        name: Input frame rate
+        graph: line
+        detail: 2
+        hours_to_show: 1
+      - type: sensor
+        entity: sensor.pixlite_a4_s_mk3_output_frame_rate
+        name: Output frame rate
+        graph: line
+        detail: 2
+        hours_to_show: 1
+  - type: vertical-stack
+    cards:
+    - type: markdown
+      content: '## E16 controller'
+    - type: tile
+      entity: sensor.pixlite_e16_s_mk3_mode
+      name: Operating mode
+      tap_action:
+        action: more-info
+    - type: grid
+      columns: 2
+      square: false
+      cards:
+      - type: gauge
+        entity: sensor.pixlite_e16_s_mk3_cpu_usage
+        name: CPU usage
+        min: 0
+        max: 100
+      - type: sensor
+        entity: sensor.pixlite_e16_s_mk3_temperature
+        name: Temperature
+        graph: line
+        detail: 2
+        hours_to_show: 1
+    - type: grid
+      columns: 2
+      square: false
+      cards:
+      - type: sensor
+        entity: sensor.pixlite_e16_s_mk3_input_frame_rate
+        name: Input frame rate
+        graph: line
+        detail: 2
+        hours_to_show: 1
+      - type: sensor
+        entity: sensor.pixlite_e16_s_mk3_output_frame_rate
+        name: Output frame rate
+        graph: line
+        detail: 2
+        hours_to_show: 1
+  - type: vertical-stack
+    cards:
+    - type: markdown
+      content: '## A4 power'
+    - type: sensor
+      entity: sensor.pixlite_a4_s_mk3_bank_1_voltage
+      name: Input bank voltage
+      graph: line
+      detail: 2
+      hours_to_show: 1
+    - type: grid
+      columns: 2
+      square: false
+      cards:
+      - type: sensor
+        entity: sensor.pixlite_a4_s_mk3_output_1_current
+        name: Output 1 current
+        graph: line
+        detail: 2
+        hours_to_show: 1
+      - type: sensor
+        entity: sensor.pixlite_a4_s_mk3_output_2_current
+        name: Output 2 current
+        graph: line
+        detail: 2
+        hours_to_show: 1
+      - type: sensor
+        entity: sensor.pixlite_a4_s_mk3_output_3_current
+        name: Output 3 current
+        graph: line
+        detail: 2
+        hours_to_show: 1
+      - type: sensor
+        entity: sensor.pixlite_a4_s_mk3_output_4_current
+        name: Output 4 current
+        graph: line
+        detail: 2
+        hours_to_show: 1
+    - type: grid
+      columns: 2
+      square: false
+      cards:
+      - type: tile
+        entity: sensor.pixlite_a4_s_mk3_output_1_power_status
+        name: Output 1 power
+        tap_action:
+          action: more-info
+      - type: tile
+        entity: sensor.pixlite_a4_s_mk3_output_2_power_status
+        name: Output 2 power
+        tap_action:
+          action: more-info
+      - type: tile
+        entity: sensor.pixlite_a4_s_mk3_output_3_power_status
+        name: Output 3 power
+        tap_action:
+          action: more-info
+      - type: tile
+        entity: sensor.pixlite_a4_s_mk3_output_4_power_status
+        name: Output 4 power
+        tap_action:
+          action: more-info
+  theme: Advatek
+  show_icon_and_title: true
