@@ -70,6 +70,23 @@ def test_documented_response(device_data):
     assert device.nickname == "Garden"
 
 
+@pytest.mark.parametrize("model", ["a4_s", "e16_s"])
+def test_captured_controller_response(model):
+    """Accept sanitized ADAR replies captured from firmware 3.15.0 controllers."""
+    path = Path(__file__).parent / "fixtures" / f"adar_{model}_mk3_v3_15_0.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    device = adar.parse_response(packet(data), data["ipAddr"])
+    assert device is not None
+    assert device.eligible
+    assert device.model == data["prodName"]
+    assert device.mac == data["macAddr"].lower()
+    receiver = adar._Receiver()
+    for _ in range(2):
+        receiver.datagram_received(packet(data), (data["ipAddr"], 49151))
+    assert receiver.devices == {device.mac: device}
+    assert not receiver.conflicts
+
+
 @pytest.mark.parametrize(
     "changes",
     [

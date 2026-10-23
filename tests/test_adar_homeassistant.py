@@ -1,7 +1,10 @@
 """Exercise discovery through real Home Assistant flows and entry lifecycle."""
 
 import asyncio
+import json
+import struct
 from copy import deepcopy
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -22,7 +25,11 @@ from homeassistant.helpers import device_registry, entity_registry, frame
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.advatek_pixlite import async_setup_entry, async_unload_entry
-from custom_components.advatek_pixlite._adar import Device, DiscoveryResult
+from custom_components.advatek_pixlite._adar import (
+    Device,
+    DiscoveryResult,
+    parse_response,
+)
 from custom_components.advatek_pixlite.api import (
     InvalidAuth,
     PixLiteError,
@@ -156,6 +163,41 @@ async def test_manual_entry_setup_unload_reload(ha):
     await hass.async_block_till_done()
     assert entry.state is ConfigEntryState.LOADED
     client.request.assert_not_awaited()
+
+
+@pytest.mark.parametrize("selected", ["e0b6f5000001", "e0b6f5000002"])
+async def test_captured_controllers_can_be_selected_without_api_access(ha, selected):
+    """Offer both captured models and defer API access until credentials are submitted."""
+    hass, client, factory, scan = ha
+    devices = []
+    for model in ("a4_s", "e16_s"):
+        path = Path(__file__).parent / "fixtures" / f"adar_{model}_mk3_v3_15_0.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        packet = (
+            struct.pack("!8sHH", b"DiscProt", 0x2102, 0x0101)
+            + json.dumps(data).encode()
+        )
+        device = parse_response(packet, data["ipAddr"])
+        assert device is not None
+        devices.append(device)
+    scan.return_value = DiscoveryResult(tuple(devices))
+    result = await hass.config_entries.flow.async_init(
+        "advatek_pixlite", context={"source": "user"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "discover"}
+    )
+    options = next(iter(result["data_schema"].schema.values())).config["options"]
+    assert {option["value"] for option in options} == {device.mac for device in devices}
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"device": selected}
+    )
+    assert result["step_id"] == "discovery_confirm"
+    assert result["description_placeholders"]["host"] == next(
+        device.host for device in devices if device.mac == selected
+    )
+    assert not hass.config_entries.async_entries("advatek_pixlite")
+    factory.assert_not_called()
 
 
 async def test_scan_select_authenticate_and_create_entry(ha):

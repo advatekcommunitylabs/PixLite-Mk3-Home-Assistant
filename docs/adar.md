@@ -2,6 +2,8 @@
 
 The integration sends discovery requests on the IPv4 interfaces enabled in Home Assistant's network settings. Each scan uses multicast `239.255.251.1:49151`, receives on `239.255.251.2` at the request's ephemeral UDP port, then tries limited broadcast `255.255.255.255`. Requests exclude previously found MACs. Each interface has at most six half-second rounds and fifty responses; reaching either limit produces an incomplete result. Firewalls and container networking must permit this traffic. Scans do not cross NAT automatically.
 
+Use addresses in the same subnet for a direct connection between Home Assistant and the controller. A routed connection requires working routes and firewall access; limited broadcasts remain on the local network. Discovery alone does not establish API reachability. See [RFC 1122, section 3.3.1.1](https://www.rfc-editor.org/rfc/rfc1122.html#section-3.3.1.1) (R. Braden, editor, October 1989) for local and routed delivery.
+
 Only Advatek PixLite Mk3 devices advertising API v1.9, a web interface and normal operation are offered. Recovery devices and conflicting addresses for one MAC are excluded. Packet size, field types, identifiers and sender/reported addresses are checked. Discovery messages are unauthenticated; setup still requires an API connection and matching MAC. Discovery sends no network configuration, recovery, firmware or output commands.
 
 ## Setup and lifecycle
@@ -11,6 +13,18 @@ Adding the integration offers discovery or manual address entry. Empty and faile
 Once at least one controller entry is loaded, a single shared scanner runs every five minutes. Newly discovered controllers are offered through Home Assistant's integration discovery flow. Ignored devices remain ignored. An existing entry's address changes only after its saved credentials work at the new address and its API MAC matches the saved MAC. Saved credentials and the API port are preserved. Unloading the final entry or shutting down Home Assistant cancels discovery and closes its sockets.
 
 Automatic discovery before the first entry is configured is not implemented. It needs a verified DHCP matcher or an agreed Home Assistant Core bootstrap mechanism. The manual setup scan remains available.
+
+## Physical discovery validation
+
+On 23 October 2026, the production discovery function found an A4-S Mk3 and an E16-S Mk3 in three consecutive scans from a Windows WiFi interface. Both advertised firmware 3.15.0, API v1.0 through v1.9, normal operation and a web interface. Both controller addresses and the workstation were on the same /24 subnet.
+
+Separate multicast-only and limited-broadcast-only probes also received valid replies from both controllers. Broadcast delivered duplicate replies through the two receive sockets; the MAC-keyed collector returned each controller once. Each production scan sent three discovery requests, used exclusions after the initial replies, completed without conflicts and closed both transports. Outgoing payloads were checked to contain only ADAR Discovery Request `0x1201`.
+
+With multicast transmission suppressed in the test harness, the unchanged production scanner found both controllers using its broadcast fallback. Cancelling a live scan propagated cancellation and closed both transports. These checks changed no host or controller network settings.
+
+Home Assistant 2026.10.2 also ran its actual setup flow with live ADAR discovery on the selected interface. Both devices appeared in the selection form, and selecting each reached its credentials form with the correct address. The flows were then aborted without creating entries or submitting credentials. The adapter list was supplied explicitly for the WiFi interface; ADAR transport and controller replies were real.
+
+No API credentials, HTTP requests, network-configuration messages, recovery messages, firmware uploads or output commands were sent. Sanitized captured replies for both models are retained in `tests/fixtures/` for parsing, duplicate-response and selection-flow regression tests. This verifies discovery on this Windows network and firmware combination; Linux/container networking and authenticated setup on physical controllers still require separate verification.
 
 ## Local validation
 

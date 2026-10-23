@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Connect a PixLite Mk3",
-        "description": "Discover controllers on the enabled Home Assistant network interfaces, or enter an address manually.",
+        "description": "Discover controllers on the enabled Home Assistant network interfaces, or enter an address manually. Use addresses in the same subnet for a direct connection.",
         "menu_options": {
           "discover": "Discover controllers",
           "manual": "Enter address manually"
@@ -34,7 +34,7 @@
       },
       "manual": {
         "title": "Connect a PixLite Mk3",
-        "description": "Enter the controller address. API v1.9 is required. HTTPS uses port 4443 unless overridden and requires a trusted certificate.",
+        "description": "Enter the controller address. API v1.9 is required. HTTPS uses port 4443 unless overridden and requires a trusted certificate. Use addresses in the same subnet for a direct connection.",
         "data": {
           "host": "IP address or hostname",
           "username": "User type",
@@ -45,7 +45,7 @@
       },
       "discovery_confirm": {
         "title": "Connect a PixLite Mk3",
-        "description": "Connect to the controller at {host}. Its MAC address will be checked through the authenticated API before it is added. API v1.9 is required. HTTPS defaults to port 4443 and requires a trusted certificate.",
+        "description": "Connect to the controller at {host}. Its MAC address will be checked through the authenticated API before it is added. API v1.9 is required. HTTPS defaults to port 4443 and requires a trusted certificate. Use addresses in the same subnet for a direct connection.",
         "data": {
           "username": "User type",
           "password": "Password",
@@ -62,7 +62,7 @@
       },
       "no_devices": {
         "title": "PixLite discovery",
-        "description": "No compatible controllers were found. Check enabled network interfaces, firewall and multicast access, or enter the address manually.",
+        "description": "No compatible controllers were found. Check enabled network interfaces, firewall and multicast access, or enter the address manually. Use addresses in the same subnet for a direct connection.",
         "menu_options": {
           "discover": "Scan again",
           "manual": "Enter address manually"

@@ -129,7 +129,7 @@ python -m pytest tests/test_api.py tests/test_controls.py tests/test_adar.py -q
 python -m compileall -q custom_components
 ```
 
-Before relying on automations, test one controller: add it, compare readings with its UI, start a known scene, dim it, turn the light off/on, pick a solid colour and palette preset, check live intensity priority, pause/resume, blackout, restore live mode, unplug/reconnect the network, and test a second controller independently. Test missing SD media, credential changes and DHCP changes as well. Physical hardware and deployed Home Assistant testing remain outstanding.
+Before relying on automations, test one controller: add it, compare readings with its UI, start a known scene, dim it, turn the light off/on, pick a solid colour and palette preset, check live intensity priority, pause/resume, blackout, restore live mode, unplug/reconnect the network, and test a second controller independently. Test missing SD media, credential changes and DHCP changes as well. Physical control and deployed Linux Home Assistant testing remain outstanding. Discovery-only testing on A4-S Mk3 and E16-S Mk3 controllers is recorded in [ADAR validation](docs/adar.md#physical-discovery-validation).
 
 ## References
 

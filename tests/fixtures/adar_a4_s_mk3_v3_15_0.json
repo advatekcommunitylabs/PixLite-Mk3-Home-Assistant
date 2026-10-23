@@ -1,0 +1,27 @@
+{
+  "prodFamily": 1349089331,
+  "oem": 0,
+  "macAddr": "E0B6F5000001",
+  "ipMode": "DHCP/AutoIP",
+  "ipAddr": "192.0.2.10",
+  "netmask": "255.255.255.0",
+  "gateway": "192.0.2.1",
+  "prodName": "PixLite A4-S Mk3",
+  "prodFamilyName": "PixLite Mk3",
+  "fwCheckBit": 0,
+  "factIpAddr": "192.168.0.50",
+  "inEmergRecovery": false,
+  "hasWebIf": true,
+  "authReqd": false,
+  "apiVer": [
+    {
+      "maj": "v1",
+      "min": [
+        0,
+        9
+      ]
+    }
+  ],
+  "fwVer": "3.15.0",
+  "nickname": "PixLite A4-S Mk3"
+}
