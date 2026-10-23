@@ -307,13 +307,14 @@ async def test_poll_requests_aux_fields_on_capable_devices(modules):
 async def test_playlist_selector_and_browser_filter_scenes(modules, coordinator):
     coordinator.data["files"] = ["show.pl", "Rainbow.scn", "Evening.PL"]
     select = modules.select.PlaylistSelect(coordinator, "playlist", "Playlist")
-    assert select.options == ["show.pl", "Evening.PL"]
-    assert select.current_option == "show.pl"
-    await select.async_select_option("Evening.PL")
+    assert select.options == ["show", "Evening"]
+    assert select.current_option == "show"
+    await select.async_select_option("Evening")
     coordinator.command.assert_awaited_once_with("modePlayback", {"op": "File", "file": "Evening.PL", "cnt": 0})
     player = modules.media_player.PlaylistPlayer(coordinator)
     tree = await player.async_browse_media()
-    assert [child.media_content_id for child in tree.children] == select.options
+    assert [child.title for child in tree.children] == select.options
+    assert [child.media_content_id for child in tree.children] == ["show.pl", "Evening.PL"]
     assert all(child.can_play and not child.can_expand for child in tree.children)
     coordinator.data["files"] = []
     assert (await player.async_browse_media()).children == []
@@ -343,8 +344,8 @@ async def test_playlist_status_and_transport(modules, coordinator):
     player = modules.media_player.PlaylistPlayer(coordinator)
     coordinator.data["status"]["state"] = {"item": 2, "op": "File", "file": "Rainbow.scn", "paus": True, "timS": 42}
     assert player.state == "paused"
-    assert player.media_title == "show.pl"
-    assert player.extra_state_attributes["item_file"] == "Rainbow.scn"
+    assert player.media_title == "show"
+    assert player.extra_state_attributes["item_file"] == "Rainbow"
     for method, op in [("async_media_play", "Play"), ("async_media_pause", "Paus"), ("async_media_next_track", "Nxt"), ("async_media_previous_track", "Prv")]:
         await getattr(player, method)()
         coordinator.command.assert_awaited_with("playbackCtrl", {"op": op})

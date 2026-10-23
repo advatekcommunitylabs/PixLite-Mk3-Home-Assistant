@@ -115,7 +115,7 @@ async def colour_runtime(tmp_path):
     for platform in platforms:
         await platform.async_reset()
     await coordinator.async_shutdown()
-    await hass.async_stop()
+    await hass.async_stop(force=True)
 
 
 async def test_rgbwx_services_preserve_other_channels(colour_runtime):

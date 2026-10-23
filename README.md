@@ -17,8 +17,8 @@ Requires a controller advertising API **v1.9** and a modern Home Assistant insta
 - **Pixels** light entity provides on/off, master brightness, a colour picker and transitions. Brightness-only commands preserve the current scene, playlist or live mode.
 - **Showtime colour preset** selects one of up to 12 controller palette colours. It starts solid-colour playback, preserves the current intensity, and uses Showtime's configured fade time. Turn the light on if master intensity is zero. Presets are read from the controller and refresh with polling; editing/saving the controller palette is not included.
 - **Intensity priority** selects Override live intensity or Yield to live intensity. Explicit light on/off/brightness commands take priority again. Yield allows incoming live intensity to win when available; otherwise the programmed factor applies.
-- **Showtime file** select lists `.scn` scenes and `.pl` playlists on the microSD card. Selecting a file starts it immediately and loops indefinitely (`cnt: 0`). Selecting it again via an action restarts it.
-- Separate **Play**, **Pause**, **Previous** and **Next** playback buttons with matching icons. Play resumes an existing file playback; choose a Showtime file to start a scene. Previous and Next navigate playlist items, not the file browser. Existing button unique IDs are preserved, including the former Resume button.
+- **Showtime scene** and **Showtime playlist** are separate dropdowns. Names hide the `.scn` and `.pl` suffixes; selecting a name still sends its complete filename to the controller. Selecting it starts playback immediately and loops indefinitely (`cnt: 0`). Selecting it again via an action restarts it.
+- Separate **Play**, **Pause**, **Previous** and **Next** playback buttons with matching icons. Play resumes an existing file playback; choose a Showtime scene to start one. Previous and Next navigate playlist items, not the file browser. Existing button unique IDs are preserved, including the former Resume button.
 - Other buttons: Blank, Freeze, Live Data, Restart current mode, Refresh Showtime files.
 - **Aux N intensity** faders (0–100%) appear for auxiliary ports configured as DMX Output. Adjusting a fader takes priority over live intensity for that auxiliary output without changing pixel brightness or playback mode. Values reflect the currently controlling intensity. The integration detects newly enabled DMX outputs while polling; previously added faders become unavailable when their port is changed to input or disabled.
 - The device exposes controller health as diagnostics, with temperature, bank input voltages and output power status enabled by default for new entries. CPU usage, frame rates, per-output current/voltage and duplicate playback detail sensors are available to enable. Mode remains a primary sensor. Existing registry names and enabled states are preserved. See docs/sensor-organization.md for the full layout.
@@ -57,12 +57,12 @@ triggers:
 actions:
   - action: select.select_option
     target:
-      entity_id: select.garden_pixlite_showtime_file
+      entity_id: select.garden_pixlite_showtime_playlist
     data:
-      option: "Evening.pl"
+      option: "Evening"
 ```
 
-For several controllers, target multiple select entities if they contain the same filename, or use separate actions for different filenames. This is automation-level triggering, not frame-synchronized playback across controllers.
+For several controllers, target multiple playlist select entities if they contain the same playlist name, or use separate actions for different names. This is automation-level triggering, not frame-synchronized playback across controllers.
 
 Dim the running scene without replacing it:
 
@@ -91,11 +91,13 @@ data:
 
 Playlists already stored as `.pl` files on the controller are supported in three places:
 
-- **Showtime playlist** is a playlist-only dropdown. Selecting a playlist starts it immediately and repeats continuously. The original Showtime file selector remains available for existing automations.
+- **Showtime playlist** is a playlist-only dropdown. Selecting a playlist starts it immediately and repeats continuously. **Showtime scene** lists scenes separately.
 - **Showtime playlist player** is a Home Assistant media player entity with a browser for stored playlists, Play/Pause and Previous/Next controls. It represents lighting playback, not audio, and has no volume control.
 - **Playlist item**, **Playlist item type**, and **Playlist item file** sensors expose the current item. The player also has attributes for the item colour, elapsed playback seconds, repeat count and playback error code. Item position is reported exactly as supplied by the controller. The item filename is unknown for colour/blank/freeze items.
 
 The player follows playlists started externally in Showtime too. Status refreshes every 10 seconds; the file browser refreshes every 60 seconds or using Refresh Showtime files. A missing SD card produces an empty browser. It may take the next status poll for the controller to report the first playlist item after starting playback.
+
+Dropdown options, browser titles, player titles and playback-name sensors omit file extensions. The controller's filenames and media content IDs retain them, including `media_content_id: "Evening.pl"` below. Existing select automations must use the extensionless option and target the playlist selector for playlists. Entity unique IDs are retained, so an existing scene selector may still have its former `showtime_file` entity ID.
 
 Play resumes an active playlist; use the browser or dropdown to start one. Previous/Next navigate items within that playlist. No seek, shuffle, queue editing, playlist creation/uploads, or synchronized multi-controller playback is exposed. Use Blank or Live Data to leave playlist playback. A playlist error is represented by an idle player plus the existing Playback error binary sensor and error-code attribute.
 
@@ -129,7 +131,7 @@ This implementation uses HTTP polling; Advatek recommends WebSockets for push up
 
 ```powershell
 $env:PYTEST_DISABLE_PLUGIN_AUTOLOAD = '1'
-python -m pytest -p pytest_asyncio.plugin tests/test_colour_contract.py -q
+python -m pytest -p pytest_asyncio.plugin tests/test_colour_contract.py tests/test_file_display.py -q
 ```
 
 ```sh

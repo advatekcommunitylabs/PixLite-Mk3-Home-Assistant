@@ -12,12 +12,13 @@ from .controls import (
     validate_color,
 )
 from .entity import PixLiteEntity
+from .file_names import display_name
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities(
         [
-            ShowtimeSelect(entry.runtime_data, "showtime", "Showtime file"),
+            ShowtimeSelect(entry.runtime_data, "showtime", "Showtime scene"),
             PlaylistSelect(entry.runtime_data, "playlist", "Showtime playlist"),
             PaletteSelect(entry.runtime_data, "palette", "Showtime colour preset"),
             IntensityPrioritySelect(
@@ -29,35 +30,44 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
 class ShowtimeSelect(PixLiteEntity, SelectEntity):
     _attr_icon = "mdi:movie-play"
+    _file_extension = ".scn"
+
+    @property
+    def files(self):
+        return [
+            file
+            for file in self.coordinator.data["files"]
+            if file.lower().endswith(self._file_extension)
+        ]
 
     @property
     def options(self):
-        return self.coordinator.data["files"]
+        return list(dict.fromkeys(display_name(file) for file in self.files))
 
     @property
     def current_option(self):
         status = self.coordinator.data["status"]
         file = (status.get("params") or {}).get("file")
         return (
-            file if status.get("mode") == "playback" and file in self.options else None
+            display_name(file)
+            if status.get("mode") == "playback" and file in self.files
+            else None
         )
 
     async def async_select_option(self, option):
-        if option not in self.options:
+        matches = [file for file in self.files if display_name(file) == option]
+        if len(matches) != 1:
             raise HomeAssistantError(
-                "File is no longer available; refresh the file list"
+                "File is unavailable or its name is ambiguous; refresh the file list"
             )
         await self.coordinator.command(
-            "modePlayback", {"op": "File", "file": option, "cnt": 0}
+            "modePlayback", {"op": "File", "file": matches[0], "cnt": 0}
         )
 
 
 class PlaylistSelect(ShowtimeSelect):
     _attr_icon = "mdi:playlist-play"
-
-    @property
-    def options(self):
-        return [file for file in super().options if file.lower().endswith(".pl")]
+    _file_extension = ".pl"
 
 
 class PaletteSelect(PixLiteEntity, SelectEntity):

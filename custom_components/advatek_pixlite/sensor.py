@@ -1,8 +1,8 @@
 """Controller health, playback, and per-output measurements."""
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
-import math
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import (
@@ -21,6 +21,7 @@ from homeassistant.const import (
 )
 
 from .entity import PixLiteEntity, value_at
+from .file_names import display_name
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -218,6 +219,10 @@ class PixLiteSensor(PixLiteEntity, SensorEntity):
         if value is None:
             return None
         if description.native_unit_of_measurement is None:
+            if description.key in ("file", "playlist_item_file") and isinstance(
+                value, str
+            ):
+                return display_name(value)
             return (
                 value
                 if isinstance(value, (str, int)) and not isinstance(value, bool)

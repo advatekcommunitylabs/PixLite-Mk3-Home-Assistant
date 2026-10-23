@@ -15,6 +15,7 @@ from homeassistant.exceptions import HomeAssistantError
 from .const import DOMAIN
 from .controls import transition_ms
 from .entity import PixLiteEntity
+from .file_names import display_name
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -69,7 +70,7 @@ class PlaylistPlayer(PixLiteEntity, MediaPlayerEntity):
 
     @property
     def media_title(self):
-        return self.active_playlist
+        return display_name(self.active_playlist)
 
     @property
     def media_content_id(self):
@@ -88,7 +89,7 @@ class PlaylistPlayer(PixLiteEntity, MediaPlayerEntity):
         return {
             "playlist_item": state.get("item"),
             "item_type": state.get("op"),
-            "item_file": state.get("file"),
+            "item_file": display_name(state.get("file")),
             "item_colour_16bit": state.get("color"),
             "elapsed_seconds": state.get("timS"),
             "repeat_count": (status.get("params") or {}).get("cnt", 0),
@@ -107,7 +108,7 @@ class PlaylistPlayer(PixLiteEntity, MediaPlayerEntity):
             can_expand=True,
             children=[
                 BrowseMedia(
-                    title=file,
+                    title=display_name(file),
                     media_class=MediaClass.PLAYLIST,
                     media_content_id=file,
                     media_content_type=DOMAIN,
