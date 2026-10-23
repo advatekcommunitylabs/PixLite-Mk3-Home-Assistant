@@ -25,6 +25,7 @@ class PixLiteCoordinator(DataUpdateCoordinator):
 
     async def _read_data(self):
         try:
+            await self._verify_identity()
             status = await self.client.read("status")
             statistic_paths = ["dev", "pixData", "pixPwrOuts"]
             config_paths = ["pix.colorType", "operIf"]
@@ -42,6 +43,7 @@ class PixLiteCoordinator(DataUpdateCoordinator):
                         self.files = []
                     elif err.code != 10:  # Recording/formatting can prohibit listing.
                         raise
+                    self.files_updated = time.monotonic()
             return {"status": status, "statistic": stats, "files": list(self.files), "config": config}
         except InvalidAuth as err:
             raise ConfigEntryAuthFailed(str(err)) from err
@@ -51,11 +53,16 @@ class PixLiteCoordinator(DataUpdateCoordinator):
     async def command(self, name, params=None):
         await self.commands([(name, params)])
 
+    async def _verify_identity(self):
+        """Check the entry identity before accepting readings or sending controls."""
+        await self.client.verify_identity(self.config_entry.unique_id)
+
     async def commands(self, commands):
         """Keep multi-request light actions together; do not retry output changes."""
         try:
             async with self.control_lock:
                 for name, params in commands:
+                    await self._verify_identity()
                     await self.client.request(name, params)
         except PixLiteError as err:
             # An earlier command may have succeeded; reconcile partial success.

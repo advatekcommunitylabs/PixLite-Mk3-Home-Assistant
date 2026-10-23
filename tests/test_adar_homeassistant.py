@@ -22,6 +22,7 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import device_registry, entity_registry, frame
+from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.advatek_pixlite import async_setup_entry, async_unload_entry
@@ -54,7 +55,7 @@ class _Resolver(ThreadedResolver):
 
 
 @pytest_asyncio.fixture
-async def ha(tmp_path):
+async def ha(tmp_path, unused_tcp_port):
     """Use actual HA configuration managers and all integration entity platforms."""
     hass = HomeAssistant(str(tmp_path))
     loader.async_setup(hass)
@@ -110,6 +111,7 @@ async def ha(tmp_path):
     async def read(name, paths=None):
         return deepcopy(objects[name])
 
+    client.verify_identity = AsyncMock()
     client.initialize = AsyncMock()
     client.read = AsyncMock(side_effect=read)
     client.files = AsyncMock(return_value=["show.pl"])
@@ -133,6 +135,7 @@ async def ha(tmp_path):
             AsyncMock(return_value=DiscoveryResult()),
         ) as scan,
     ):
+        assert await async_setup_component(hass, "http", {"http": {"server_host": "127.0.0.1", "server_port": unused_tcp_port}})
         yield hass, client, factory, scan
         for entry in hass.config_entries.async_entries("advatek_pixlite"):
             if entry.state is ConfigEntryState.LOADED:

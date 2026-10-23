@@ -67,6 +67,7 @@ class PixLiteConfigFlow(AdarFlow, config_entries.ConfigFlow, domain=DOMAIN):
             if step == "discovery_confirm":
                 data["host"] = self._selected.host
             data.setdefault("password", "")
+            data.setdefault("port", None)
             try:
                 data["host"] = normalize_host(data["host"])
                 client, identity = await self._identify(data)
@@ -127,7 +128,7 @@ class PixLiteConfigFlow(AdarFlow, config_entries.ConfigFlow, domain=DOMAIN):
                 ): bool,
                 probatio.Optional(
                     "port",
-                    **({"default": defaults["port"]} if "port" in defaults else {}),
+                    **({"default": defaults["port"]} if defaults.get("port") is not None else {}),
                 ): probatio.Port(),
             }
         )

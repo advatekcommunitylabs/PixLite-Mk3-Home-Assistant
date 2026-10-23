@@ -80,6 +80,7 @@ def modules(monkeypatch):
     monkeypatch.setitem(sys.modules, update.__name__, update)
     loaded = {name: importlib.import_module("pixlite_test." + name)
               for name in ["controls", "light", "select", "coordinator", "number", "button", "media_player"]}
+    loaded["coordinator"].PixLiteCoordinator._verify_identity = AsyncMock()
     yield SimpleNamespace(**loaded)
     for name in list(sys.modules):
         if name.startswith("pixlite_test."):

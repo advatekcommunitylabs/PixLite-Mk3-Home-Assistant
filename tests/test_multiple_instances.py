@@ -67,6 +67,7 @@ async def pair(ha):
             return deepcopy(objects[name])
 
         client.read = AsyncMock(side_effect=read)
+        client.verify_identity = AsyncMock()
         client.initialize = AsyncMock()
         client.files = AsyncMock(return_value=[filename])
         client.request = AsyncMock(return_value={})

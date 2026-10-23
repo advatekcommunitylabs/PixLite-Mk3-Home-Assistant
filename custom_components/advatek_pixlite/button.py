@@ -31,6 +31,6 @@ class PixLiteButton(PixLiteEntity, ButtonEntity):
     async def async_press(self):
         if self.command_name is None:
             self.coordinator.files_updated = 0
-            await self.coordinator.async_request_refresh()
+            await self.coordinator.async_refresh()
         else:
             await self.coordinator.command(self.command_name, self.params)

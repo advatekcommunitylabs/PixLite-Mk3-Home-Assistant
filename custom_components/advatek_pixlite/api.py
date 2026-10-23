@@ -3,6 +3,7 @@ import asyncio
 import base64
 import hashlib
 import re
+from typing import Any
 
 import aiohttp
 
@@ -32,6 +33,21 @@ def normalize_host(host):
     if not re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?", host):
         raise ValueError("Enter an IPv4 address or hostname without a URL or port")
     return host
+
+
+def _controller_identity(constants: dict[str, Any]) -> str:
+    """Validate the controller MAC used by config entries and device identifiers."""
+    dev = constants.get("dev")
+    mac = dev.get("macAddr") if isinstance(dev, dict) else None
+    if not isinstance(mac, str) or not re.fullmatch(
+        r"(?:[0-9a-f]{12}|(?:[0-9a-f]{2}:){5}[0-9a-f]{2}|(?:[0-9a-f]{2}-){5}[0-9a-f]{2})",
+        mac.lower(),
+    ):
+        raise PixLiteError("Invalid controller MAC address")
+    identity = mac.replace("-", "").replace(":", "").lower()
+    if identity == "000000000000" or int(identity[:2], 16) & 1:
+        raise PixLiteError("Invalid controller MAC address")
+    return identity
 
 
 class PixLiteClient:
@@ -88,21 +104,42 @@ class PixLiteClient:
             raise PixLiteError(f"Missing {object_name} object")
         return value
 
-    async def initialize(self):
+    async def initialize(self) -> dict[str, Any]:
         self.version = await self._exchange("GET", "/ver")
         versions = self.version.get("apiVer", [])
-        if not any(v.get("maj") == "v1" and len(v.get("min", [])) == 2
-                   and v["min"][0] <= 9 <= v["min"][1] for v in versions):
+        if not isinstance(versions, list) or any(
+            not isinstance(version, dict)
+            or not isinstance(version.get("maj"), str)
+            or not isinstance(version.get("min"), list)
+            or len(version["min"]) != 2
+            or any(type(value) is not int or value < 0 for value in version["min"])
+            or version["min"][0] > version["min"][1]
+            for version in versions
+        ):
+            raise PixLiteError("Invalid API version response")
+        if not any(
+            v.get("maj") == "v1"
+            and len(v.get("min", [])) == 2
+            and v["min"][0] <= 9 <= v["min"][1]
+            for v in versions
+        ):
             raise UnsupportedDevice("Controller must support API v1.9")
         self.constants = await self.read("constant", ["dev", "ver"])
         dev = self.constants.get("dev", {})
-        if dev.get("prodFamilyName") != "PixLite Mk3" or not dev.get("macAddr"):
+        if not isinstance(dev, dict) or dev.get("prodFamilyName") != "PixLite Mk3":
             raise UnsupportedDevice("Expected a PixLite Mk3 with a MAC address")
+        _controller_identity(self.constants)
         return self.constants
 
     @property
-    def unique_id(self):
-        return self.constants["dev"]["macAddr"].replace("-", "").replace(":", "").lower()
+    def unique_id(self) -> str:
+        return _controller_identity(self.constants)
+
+    async def verify_identity(self, expected_id: str) -> None:
+        """Confirm the saved address still belongs to the configured controller."""
+        constants = await self.read("constant", ["dev.macAddr"])
+        if _controller_identity(constants) != expected_id:
+            raise PixLiteError("A different controller is using this address; reconfigure the entry")
 
     async def files(self):
         result = await self.request("fileList", {"pattern": ["*.scn", "*.pl"]})
