@@ -4,13 +4,10 @@
     "step": {
       "user": {
         "title": "Connect a PixLite Mk3",
-        "description": "Enter the controller address. API v1.9 is required. HTTPS uses port 4443 unless overridden and requires a trusted certificate.",
-        "data": {
-          "host": "IP address or hostname",
-          "username": "User type",
-          "password": "Password",
-          "use_ssl": "Use HTTPS",
-          "port": "Port (optional)"
+        "description": "Discover controllers on the enabled Home Assistant network interfaces, or enter an address manually.",
+        "menu_options": {
+          "discover": "Discover controllers",
+          "manual": "Enter address manually"
         }
       },
       "reconfigure": {
@@ -34,19 +31,68 @@
           "use_ssl": "Use HTTPS",
           "port": "Port (optional)"
         }
+      },
+      "manual": {
+        "title": "Connect a PixLite Mk3",
+        "description": "Enter the controller address. API v1.9 is required. HTTPS uses port 4443 unless overridden and requires a trusted certificate.",
+        "data": {
+          "host": "IP address or hostname",
+          "username": "User type",
+          "password": "Password",
+          "use_ssl": "Use HTTPS",
+          "port": "Port (optional)"
+        }
+      },
+      "discovery_confirm": {
+        "title": "Connect a PixLite Mk3",
+        "description": "Connect to the controller at {host}. Its MAC address will be checked through the authenticated API before it is added. API v1.9 is required. HTTPS defaults to port 4443 and requires a trusted certificate.",
+        "data": {
+          "username": "User type",
+          "password": "Password",
+          "use_ssl": "Use HTTPS",
+          "port": "Port (optional)"
+        }
+      },
+      "select_device": {
+        "title": "Discovered PixLite controllers",
+        "description": "Choose the controller to connect. Discovery does not change controller configuration or output.",
+        "data": {
+          "device": "Controller"
+        }
+      },
+      "no_devices": {
+        "title": "PixLite discovery",
+        "description": "No compatible controllers were found. Check enabled network interfaces, firewall and multicast access, or enter the address manually.",
+        "menu_options": {
+          "discover": "Scan again",
+          "manual": "Enter address manually"
+        }
+      },
+      "scan_failed": {
+        "title": "PixLite discovery",
+        "description": "Discovery was incomplete or no enabled IPv4 interfaces were available. Try again or enter the controller address manually.",
+        "menu_options": {
+          "discover": "Scan again",
+          "manual": "Enter address manually"
+        }
       }
     },
     "error": {
       "invalid_host": "Enter an IPv4 address or hostname without a scheme, path or port.",
       "invalid_auth": "Authentication failed. Check the user and password.",
       "unsupported_device": "A PixLite Mk3 supporting API v1.9 is required.",
-      "cannot_connect": "Cannot communicate with the controller. Check address, credentials, network and TLS certificate."
+      "cannot_connect": "Cannot communicate with the controller. Check address, credentials, network and TLS certificate.",
+      "identity_mismatch": "The API reports a different controller MAC address. Rescan and select the intended controller.",
+      "scan_incomplete": "The scan was incomplete. These are partial results; additional controllers may be missing."
     },
     "abort": {
       "already_configured": "This controller is already configured.",
       "wrong_device": "This is a different controller. Add it as another integration entry.",
       "reauth_successful": "Authentication updated.",
-      "reconfigure_successful": "Controller connection updated."
+      "reconfigure_successful": "Controller connection updated.",
+      "invalid_discovery": "The discovery information is invalid. Rescan or enter the address manually.",
+      "device_not_found": "The selected controller is no longer in this scan. Scan again.",
+      "cannot_connect": "The discovered address could not be verified with the saved credentials. The saved address was not changed."
     }
   }
 }

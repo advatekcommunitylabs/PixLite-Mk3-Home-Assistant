@@ -7,10 +7,10 @@ Local custom integration, version 0.4.1. Add one entry per controller; controlle
 1. Copy `custom_components/advatek_pixlite` into your Home Assistant configuration directory, resulting in `/config/custom_components/advatek_pixlite/manifest.json`.
 2. Restart Home Assistant.
 3. Open **Settings > Devices & services > Add integration > Advatek PixLite Mk3**.
-4. Enter the controller IP address/hostname, user (Administrator or enabled Operator) and password. An empty password is supported. HTTP defaults to 80; HTTPS defaults to 4443. Leave the optional port blank for these defaults.
+4. Choose **Discover controllers** to scan the IPv4 interfaces enabled in Home Assistant's network settings, then select a controller. Alternatively, choose **Enter address manually**. Supply the user (Administrator or enabled Operator) and password. Operator is selected by default. An empty password is supported. HTTP defaults to 80; HTTPS defaults to 4443. Leave the optional port blank for these defaults.
 5. Repeat for each additional controller. Assign each device a useful name and area.
 
-Requires a controller advertising API **v1.9** and a modern Home Assistant installation supporting config entry `runtime_data`. Intended baseline: Home Assistant 2025.1 or later; full HA runtime compatibility has not yet been verified. Use **Reconfigure** on the integration entry after an IP address or password change. A replacement controller with a different MAC should be added separately.
+Requires a controller advertising API **v1.9** and Home Assistant **2026.10.2 or later**. Local runtime tests use 2026.10.2. Discovery checks the selected controller's MAC through the authenticated API before setup. While an entry is loaded, discovery runs every five minutes and can update an existing controller's address after authenticating and verifying its MAC. Use **Reconfigure** for manual address or credential changes. A replacement controller with a different MAC should be added separately. See [ADAR discovery](docs/adar.md) for network requirements and validation limits.
 
 ## Controls and monitoring
 
@@ -117,22 +117,24 @@ data:
 
 All traffic stays on the local network. The API authenticates with Base64URL(SHA256(password)) query parameters, not HTTP Basic Auth. HTTP sends that reusable credential hash without encryption; use a trusted local network or configure HTTPS with the Advatek CA trusted by the HA environment. Certificate checking is never disabled. Credentials are stored in Home Assistant's config entry storage, and should be protected along with backups. Client errors intentionally omit request URLs.
 
-This implementation uses HTTP polling; Advatek recommends WebSockets for push updates, which is a future improvement. No automatic network discovery, firmware updates, scene creation/uploads, pixel mapping changes, per-pixel streaming, or physical-controller configuration changes are included. Scenes/playlists must already exist on the controller. Adding/reloading the integration only reads data; output changes require an explicit entity action.
+This implementation uses HTTP polling; Advatek recommends WebSockets for push updates, which is a future improvement. ADAR is used only for discovery. Firmware updates, network configuration, scene creation/uploads, pixel mapping changes, per-pixel streaming, and physical-controller configuration changes are not included. Scenes/playlists must already exist on the controller. Adding/reloading the integration only reads data; output changes require an explicit entity action.
 
 ## Validation
 
-`tests/test_api.py` runs the actual aiohttp client against a local HTTP simulator. It checks authentication encoding, version gating, endpoint/message formatting, serialization, file enumeration, result-less responses, and HTTP/API failures. `tests/test_controls.py` tests light/palette/priority behaviour and compound-command handling using lightweight HA interface doubles. These tests do not boot Home Assistant or substitute for hardware testing.
+`tests/test_api.py` runs the actual aiohttp client against a local HTTP simulator. It checks authentication encoding, version gating, endpoint/message formatting, serialization, file enumeration, result-less responses, and HTTP/API failures. `tests/test_controls.py` tests light/palette/priority behaviour and compound-command handling using lightweight HA interface doubles. `tests/test_adar.py` verifies protocol parsing, socket configuration, bounded discovery and loopback UDP exchange. `tests/test_adar_homeassistant.py` exercises actual Home Assistant config flows, entity platform setup, polling, unload and shutdown with simulated controller responses. These tests do not establish hardware or production network compatibility. [Local validation instructions](docs/adar.md#local-validation) include the runtime test dependencies.
 
 ```sh
 python -m pip install aiohttp pytest pytest-asyncio
-python -m pytest tests -q
+python -m pytest tests/test_api.py tests/test_controls.py tests/test_adar.py -q
 python -m compileall -q custom_components
 ```
 
-Before relying on automations, test one controller: add it, compare readings with its UI, start a known scene, dim it, turn the light off/on, pick a solid colour and palette preset, check live intensity priority, pause/resume, blackout, restore live mode, unplug/reconnect the network, and test a second controller independently. Test missing SD media, credential changes and DHCP changes as well. These changes have not yet been tested on physical hardware or in a running HA instance.
+Before relying on automations, test one controller: add it, compare readings with its UI, start a known scene, dim it, turn the light off/on, pick a solid colour and palette preset, check live intensity priority, pause/resume, blackout, restore live mode, unplug/reconnect the network, and test a second controller independently. Test missing SD media, credential changes and DHCP changes as well. Physical hardware and deployed Home Assistant testing remain outstanding.
 
 ## References
 
 Implemented from the supplied **PixLite Mk3 API v1.9, V20260617**, especially sections 4, 6, 7.2, 7.7-7.9, 7.13-7.15. The PDF is not redistributed.
+
+Discovery follows **Advatek Discovery and Recovery Protocol V1.0, V20211022**, sections 2 to 5.1. The PDF is not redistributed.
 
 Home Assistant developer references: [config flows](https://contributors.home-assistant.io/core/integrations/config-flow/), [coordinated polling](https://contributors.home-assistant.io/core/integrations/fetching-data/), and [select entities](https://contributors.home-assistant.io/core/entities/select/).

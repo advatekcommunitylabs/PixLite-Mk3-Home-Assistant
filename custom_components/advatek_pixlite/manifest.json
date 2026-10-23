@@ -3,6 +3,7 @@
   "name": "Advatek PixLite Mk3",
   "codeowners": [],
   "config_flow": true,
+  "dependencies": ["network"],
   "documentation": "https://www.advateklighting.com/",
   "integration_type": "device",
   "iot_class": "local_polling",

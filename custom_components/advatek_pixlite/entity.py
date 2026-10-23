@@ -1,6 +1,8 @@
 """Common controller entity."""
-from homeassistant.helpers.entity import DeviceInfo
+
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
 from .const import DOMAIN
 
 
@@ -13,7 +15,8 @@ class PixLiteEntity(CoordinatorEntity):
         self._attr_unique_id = f"{client.unique_id}_{key}"
         self._attr_name = name
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, client.unique_id)}, manufacturer="Advatek Lighting",
+            identifiers={(DOMAIN, client.unique_id)},
+            manufacturer="Advatek Lighting",
             model=client.constants["dev"].get("prodName"),
             name=client.version.get("nickname") or client.constants["dev"]["prodName"],
             sw_version=client.constants.get("ver", {}).get("fw"),
