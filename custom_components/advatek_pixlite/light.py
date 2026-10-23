@@ -134,51 +134,28 @@ class PixLiteLight(PixLiteEntity, LightEntity):
                 ]
 
             await self.coordinator.color_commands(build_color)
-        elif ATTR_BRIGHTNESS not in kwargs:
-            # A bare On after the separate Blackout button needs a visible mode.
-            status = self.coordinator.data["status"]
-            color = solid_color(self.coordinator.data)
-            if (status.get("params") or {}).get("op") == "Blank" or (
-                color is not None and not any(color)
-            ):
-
-                def restore_color(data):
-                    status = data["status"]
-                    current = solid_color(data)
-                    commands = []
-                    if (status.get("params") or {}).get("op") == "Blank" or (
-                        current is not None and not any(current)
-                    ):
-                        count = require_color_channels(data)
-                        color = (65535, 65535, 65535) + (0,) * (count - 3)
-                        commands.append(("modePlayback", color_params(color, duration)))
-                    commands.append(
-                        (
-                            "progInt",
-                            intensity_params(
-                                effective_brightness(data) or self.last_brightness,
-                                duration,
-                            ),
-                        )
-                    )
-                    return commands
-
-                await self.coordinator.color_commands(restore_color)
-            else:
-                await self.coordinator.commands(
-                    [
-                        (
-                            "progInt",
-                            intensity_params(
-                                self.brightness or self.last_brightness, duration
-                            ),
-                        )
-                    ]
-                )
         else:
-            await self.coordinator.commands(
-                [("progInt", intensity_params(brightness, duration))]
-            )
+
+            def restore_output(data):
+                status = data["status"]
+                current = solid_color(data)
+                target = (
+                    brightness
+                    if brightness is not None
+                    else effective_brightness(data) or self.last_brightness
+                )
+                commands = []
+                if target > 0 and (
+                    (status.get("params") or {}).get("op") == "Blank"
+                    or (current is not None and not any(current))
+                ):
+                    count = require_color_channels(data)
+                    color = (65535, 65535, 65535) + (0,) * (count - 3)
+                    commands.append(("modePlayback", color_params(color, duration)))
+                commands.append(("progInt", intensity_params(target, duration)))
+                return commands
+
+            await self.coordinator.color_commands(restore_output)
         if brightness:
             self.last_brightness = brightness
         elif brightness is None and self.brightness:

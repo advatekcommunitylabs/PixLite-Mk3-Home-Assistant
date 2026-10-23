@@ -57,13 +57,7 @@ class PixLiteCoordinator(DataUpdateCoordinator[PixLiteData]):
     async def _async_update_data(self) -> PixLiteData:
         """Read controller identity, measurements, and playback status."""
         try:
-            identity = await self.client.read("constant", ["dev.macAddr"])
-            mac = identity.get("dev", {}).get("macAddr", "")
-            if (
-                mac.replace("-", "").replace(":", "").lower()
-                != self.config_entry.unique_id
-            ):
-                raise UpdateFailed("Controller MAC address does not match the entry")
+            await self.client.verify_identity(self.config_entry.unique_id)
             return {
                 "statistic": await self.client.read(
                     "statistic", ["dev", "pixData", "pixPwrOuts"]

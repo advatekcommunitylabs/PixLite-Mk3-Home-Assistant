@@ -79,6 +79,7 @@ async def colour_runtime(tmp_path):
         elif name == "progInt":
             data["status"]["outInt"][0]["fc"][1] = params["item"][0]["fc"]
 
+    client.verify_identity = AsyncMock()
     client.read = AsyncMock(side_effect=read)
     client.request = AsyncMock(side_effect=request)
     coordinator = PixLiteCoordinator(hass, entry, client)
@@ -88,6 +89,7 @@ async def colour_runtime(tmp_path):
         coordinator.async_set_updated_data(deepcopy(data))
 
     coordinator.async_request_refresh = refresh
+    coordinator.async_refresh = refresh
     platforms = []
     for domain in ("light", "number"):
         assert await async_setup_component(hass, domain, {})

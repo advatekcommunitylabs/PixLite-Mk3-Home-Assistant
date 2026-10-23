@@ -31,7 +31,7 @@ def prepare(output: Path, client_version: str, *, draft: bool) -> None:
         if source.suffix in {".py", ".yaml"}:
             shutil.copyfile(source, component / source.name)
     custom = ROOT / "custom_components/advatek_pixlite"
-    for filename in ("sensor.py", "entity.py"):
+    for filename in ("sensor.py", "entity.py", "file_names.py"):
         shutil.copyfile(custom / filename, component / filename)
     manifest = (ROOT / "core/advatek_pixlite/manifest.json.in").read_text()
     (component / "manifest.json").write_text(

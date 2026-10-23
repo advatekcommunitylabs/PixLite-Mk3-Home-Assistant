@@ -25,7 +25,7 @@ async def controller():
             if request.method == "GET":
                 assert request.path == "/ver"
                 assert not request.query
-                return web.json_response({"resp": "version", "result": {"apiVer": [{"maj": "v1", "min": state["minor"]}]}})
+                return web.json_response({"resp": "version", "result": {"apiVer": state.get("versions", [{"maj": "v1", "min": state["minor"]}])}})
             assert request.path == "/v1.9/"
             body = await request.json()
             assert next(iter(body)) == "req"
@@ -38,7 +38,7 @@ async def controller():
             if state["error"]:
                 response["err"] = {"code": state["error"], "msg": "test"}
             elif body["req"] == "constantRead":
-                response["result"] = {"constant": {"dev": {"prodFamilyName": "PixLite Mk3", "macAddr": "AC-DE-48-00-00-80"}}}
+                response["result"] = {"constant": {"dev": {"prodFamilyName": "PixLite Mk3", "macAddr": state.get("mac", "AC-DE-48-00-00-80")}}}
             elif body["req"] == "fileList":
                 response["result"] = {"files": [{"file": "Rainbow.scn"}, {"file": "Loop.pl"}, {"file": "notes.txt"}]}
             elif body["req"] == "statusRead":
@@ -126,6 +126,37 @@ async def test_separate_controllers_have_separate_locks(controller):
     client, state = controller
     other = api.PixLiteClient(client.session, "example.local")
     assert client.lock is not other.lock
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("versions", [None, 1, {}, [None], ["v1"], [{"maj": "v1", "min": None}], [{"maj": "v1", "min": "09"}], [{"maj": "v1", "min": [0]}], [{"maj": "v1", "min": [0, "9"]}], [{"maj": "v1", "min": [False, 9]}], [{"maj": "v1", "min": [9, 0]}]])
+async def test_malformed_versions_raise_protocol_errors(controller, versions):
+    client, state = controller
+    state["versions"] = versions
+    with pytest.raises(api.PixLiteError, match="Invalid API version"):
+        await client.initialize()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mac", [None, 123, [], {}, "", "invalid", "aa:bb-cc:dd:ee:ff", "aabbccddeefg", "000000000000", "ffffffffffff", "010000000001"])
+async def test_malformed_macs_raise_protocol_errors(controller, mac):
+    client, state = controller
+    state["mac"] = mac
+    with pytest.raises(api.PixLiteError, match="Invalid controller MAC"):
+        await client.initialize()
+
+
+@pytest.mark.asyncio
+async def test_live_identity_check_does_not_replace_cached_identity(controller):
+    client, state = controller
+    await client.initialize()
+    await client.verify_identity(client.unique_id)
+    state["mac"] = "aa:bb:cc:dd:ee:ff"
+    with pytest.raises(api.PixLiteError, match="different controller"):
+        await client.verify_identity(client.unique_id)
+    assert client.unique_id == "acde48000080"
+    state["mac"] = "AC-DE-48-00-00-80"
+    await client.verify_identity(client.unique_id)
 
 
 @pytest.mark.asyncio

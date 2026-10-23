@@ -31,6 +31,7 @@ class PixLiteCoordinator(DataUpdateCoordinator):
 
     async def _read_data(self):
         try:
+            await self._verify_identity()
             status = await self.client.read("status")
             statistic_paths = ["dev", "pixData", "pixPwrOuts"]
             config_paths = ["pix.colorType", "operIf"]
@@ -48,6 +49,7 @@ class PixLiteCoordinator(DataUpdateCoordinator):
                         self.files = []
                     elif err.code != 10:  # Recording/formatting can prohibit listing.
                         raise
+                    self.files_updated = time.monotonic()
             return {
                 "status": status,
                 "statistic": stats,
@@ -62,28 +64,35 @@ class PixLiteCoordinator(DataUpdateCoordinator):
     async def command(self, name, params=None):
         await self.commands([(name, params)])
 
+    async def _verify_identity(self):
+        """Check the entry identity before accepting readings or sending controls."""
+        await self.client.verify_identity(self.config_entry.unique_id)
+
     async def color_commands(self, build_commands):
         """Build colour changes from fresh configuration and status under the lock."""
         try:
             async with self.control_lock:
+                await self._verify_identity()
                 config = await self.client.read("config", ["pix.colorType", "operIf"])
                 status = await self.client.read("status")
                 snapshot = {**self.data, "config": config, "status": status}
                 for name, params in build_commands(snapshot):
+                    await self._verify_identity()
                     await self.client.request(name, params)
         except (PixLiteError, ValueError) as err:
-            await self.async_request_refresh()
+            await self.async_refresh()
             raise HomeAssistantError(str(err)) from err
-        await self.async_request_refresh()
+        await self.async_refresh()
 
     async def commands(self, commands):
         """Keep multi-request light actions together; do not retry output changes."""
         try:
             async with self.control_lock:
                 for name, params in commands:
+                    await self._verify_identity()
                     await self.client.request(name, params)
         except PixLiteError as err:
             # An earlier command may have succeeded; reconcile partial success.
-            await self.async_request_refresh()
+            await self.async_refresh()
             raise HomeAssistantError(str(err)) from err
-        await self.async_request_refresh()
+        await self.async_refresh()

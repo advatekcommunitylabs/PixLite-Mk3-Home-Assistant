@@ -80,6 +80,7 @@ def modules(monkeypatch):
     monkeypatch.setitem(sys.modules, update.__name__, update)
     loaded = {name: importlib.import_module("pixlite_test." + name)
               for name in ["controls", "light", "select", "coordinator", "number", "button", "media_player"]}
+    loaded["coordinator"].PixLiteCoordinator._verify_identity = AsyncMock()
     yield SimpleNamespace(**loaded)
     for name in list(sys.modules):
         if name.startswith("pixlite_test."):
@@ -202,7 +203,7 @@ async def test_multi_command_actions_do_not_interleave(modules):
         await asyncio.sleep(0)
     client = SimpleNamespace(request=request)
     coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test"), client)
-    coordinator.async_request_refresh = AsyncMock()
+    coordinator.async_refresh = AsyncMock()
     await asyncio.gather(coordinator.commands([("color", {}), ("intensity", {})]), coordinator.command("pause"))
     assert requests == ["color", "intensity", "pause"]
 
@@ -211,11 +212,11 @@ async def test_multi_command_actions_do_not_interleave(modules):
 async def test_partial_command_failure_refreshes_without_retry(modules):
     client = SimpleNamespace(request=AsyncMock(side_effect=[{}, modules.coordinator.PixLiteError("rejected")]))
     coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test"), client)
-    coordinator.async_request_refresh = AsyncMock()
+    coordinator.async_refresh = AsyncMock()
     with pytest.raises(Exception, match="rejected"):
         await coordinator.commands([("color", {}), ("intensity", {})])
     assert client.request.await_count == 2
-    coordinator.async_request_refresh.assert_awaited_once()
+    coordinator.async_refresh.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -410,6 +411,9 @@ async def test_unknown_colour_type_rejects_picker_palette_and_blank_restore(modu
     with pytest.raises(Exception, match="missing or unsupported"):
         await light.async_turn_on()
     coordinator.commands.assert_not_awaited()
+    with pytest.raises(Exception, match="missing or unsupported"):
+        await light.async_turn_on(brightness=90)
+    coordinator.data["status"].update(mode="live", params={})
     await light.async_turn_on(brightness=90)
     assert coordinator.commands.call_args.args[0] == [("progInt", modules.controls.intensity_params(90))]
 
@@ -487,14 +491,14 @@ async def test_colour_commands_read_current_configuration_before_any_write(modul
         read=AsyncMock(side_effect=[{"pix": {"colorType": "Unsupported"}}, {}]), request=AsyncMock())
     coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test"), client)
     coordinator.data = {"config": {"pix": {"colorType": "RGBWX"}}}
-    coordinator.async_request_refresh = AsyncMock()
+    coordinator.async_refresh = AsyncMock()
     def build(data):
         modules.controls.require_color_channels(data)
         return [("modePlayback", {})]
     with pytest.raises(Exception, match="missing or unsupported"):
         await coordinator.color_commands(build)
     client.request.assert_not_awaited()
-    coordinator.async_request_refresh.assert_awaited_once()
+    coordinator.async_refresh.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -511,7 +515,7 @@ async def test_concurrent_raw_channel_changes_use_latest_status(modules):
     client = SimpleNamespace(read=AsyncMock(side_effect=read), request=AsyncMock(side_effect=request))
     coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test"), client)
     coordinator.data = deepcopy(data)
-    coordinator.async_request_refresh = AsyncMock()
+    coordinator.async_refresh = AsyncMock()
     await asyncio.gather(
         modules.number.SolidColorChannel(coordinator, 3).async_set_native_value(12345),
         modules.number.SolidColorChannel(coordinator, 4).async_set_native_value(54321))
@@ -568,8 +572,8 @@ async def test_colour_write_failure_refreshes_without_retry(modules, failure_ind
         request=AsyncMock(side_effect=([{}] * failure_index + [modules.coordinator.PixLiteError("rejected")])) )
     coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test"), client)
     coordinator.data = {}
-    coordinator.async_request_refresh = AsyncMock()
+    coordinator.async_refresh = AsyncMock()
     with pytest.raises(Exception, match="rejected"):
         await coordinator.color_commands(lambda data: [("modePlayback", {}), ("progInt", {})])
     assert client.request.await_count == failure_index + 1
-    coordinator.async_request_refresh.assert_awaited_once()
+    coordinator.async_refresh.assert_awaited_once()
