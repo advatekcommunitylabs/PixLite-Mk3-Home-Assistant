@@ -20,6 +20,28 @@ class InvalidAuth(PixLiteError):
     """Authentication failed."""
 
 
+class InvalidCertificate(PixLiteError):
+    """HTTPS certificate validation failed before an API exchange."""
+
+    def __init__(self, verify_code: int | None = None) -> None:
+        if verify_code in (2, 18, 19, 20, 21, 27):
+            self.reason = "certificate_untrusted"
+            message = "HTTPS certificate chain is not trusted. Obtain the Advatek root CA and configure trust in the Home Assistant runtime."
+        elif verify_code in (62, 64):
+            self.reason = "certificate_identity"
+            message = "HTTPS certificate identity does not match the controller address. Contact Advatek."
+        elif verify_code == 26:
+            self.reason = "certificate_purpose"
+            message = "HTTPS certificate is not valid for TLS server authentication. Contact Advatek."
+        elif verify_code in (9, 10):
+            self.reason = "certificate_validity"
+            message = "HTTPS certificate is expired or not yet valid. Check the Home Assistant clock and contact Advatek."
+        else:
+            self.reason = "certificate_invalid"
+            message = "HTTPS certificate validation failed. Contact Advatek for the correct certificate setup."
+        super().__init__(message)
+
+
 class UnsupportedDevice(PixLiteError):
     """Not a supported Mk3 API."""
 
@@ -74,6 +96,10 @@ class PixLiteClient:
                     if response.status != 200:
                         raise PixLiteError(f"Controller returned HTTP {response.status}")
                     data = await response.json()
+            except aiohttp.ClientConnectorCertificateError as err:
+                raise InvalidCertificate(
+                    getattr(err.certificate_error, "verify_code", None)
+                ) from None
             except (aiohttp.ClientError, TimeoutError, ValueError):
                 # Do not expose exception URLs: authentication is in the query string.
                 raise PixLiteError("Unable to communicate with controller") from None

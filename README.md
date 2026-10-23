@@ -117,6 +117,8 @@ data:
 
 All traffic stays on the local network. The API authenticates with Base64URL(SHA256(password)) query parameters, not HTTP Basic Auth. HTTP sends that reusable credential hash without encryption; use a trusted local network or configure HTTPS with the Advatek CA trusted by the HA environment. Certificate checking is never disabled. Credentials are stored in Home Assistant's config entry storage, and should be protected along with backups. Client errors intentionally omit request URLs.
 
+HTTPS uses port 4443 and reports certificate trust, address identity, purpose and validity failures separately from connection errors. On the tested A4-S and E16-S firmware 3.15.0 units, HA 2026.10.2's default trust store rejects the issuer (verification code 20). Loading the authenticated Advatek root advances stock Python verification to an unsuitable-certificate-purpose failure (code 26) on both units. Successful device-specific HTTPS remains unverified; the intended server identity/purpose policy needs separate review. Loading the CA alone does not resolve this. No certificate checks are bypassed and HTTPS never automatically falls back to HTTP.
+
 This implementation uses HTTP polling; Advatek recommends WebSockets for push updates, which is a future improvement. ADAR is used only for discovery. Firmware updates, network configuration, scene creation/uploads, pixel mapping changes, per-pixel streaming, and physical-controller configuration changes are not included. Scenes/playlists must already exist on the controller. Adding/reloading the integration only reads data; output changes require an explicit entity action.
 
 ## Validation

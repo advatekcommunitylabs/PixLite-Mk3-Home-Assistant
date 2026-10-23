@@ -9,6 +9,7 @@ from ._adar import normalize_mac
 from .adar_flow import AdarFlow
 from .api import (
     InvalidAuth,
+    InvalidCertificate,
     PixLiteClient,
     PixLiteError,
     UnsupportedDevice,
@@ -75,6 +76,8 @@ class PixLiteConfigFlow(AdarFlow, config_entries.ConfigFlow, domain=DOMAIN):
                 errors["host"] = "invalid_host"
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
+            except InvalidCertificate as err:
+                errors["base"] = err.reason
             except UnsupportedDevice:
                 errors["base"] = "unsupported_device"
             except PixLiteError:

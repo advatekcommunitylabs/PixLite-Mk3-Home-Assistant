@@ -83,7 +83,12 @@
       "unsupported_device": "A PixLite Mk3 supporting API v1.9 is required.",
       "cannot_connect": "Cannot communicate with the controller. Check address, credentials, network and TLS certificate.",
       "identity_mismatch": "The API reports a different controller MAC address. Rescan and select the intended controller.",
-      "scan_incomplete": "The scan was incomplete. These are partial results; additional controllers may be missing."
+      "scan_incomplete": "The scan was incomplete. These are partial results; additional controllers may be missing.",
+      "certificate_untrusted": "HTTPS certificate chain is not trusted. Obtain the Advatek root CA and configure trust in the Home Assistant runtime.",
+      "certificate_identity": "HTTPS certificate identity does not match the controller address. Contact Advatek.",
+      "certificate_purpose": "HTTPS certificate is not valid for TLS server authentication. Contact Advatek.",
+      "certificate_validity": "HTTPS certificate is expired or not yet valid. Check the Home Assistant clock and contact Advatek.",
+      "certificate_invalid": "HTTPS certificate validation failed. Contact Advatek for the correct certificate setup."
     },
     "abort": {
       "already_configured": "This controller is already configured.",
