@@ -24,7 +24,7 @@ With multicast transmission suppressed in the test harness, the unchanged produc
 
 Home Assistant 2026.10.2 also ran its actual setup flow with live ADAR discovery on the selected interface. Both devices appeared in the selection form, and selecting each reached its credentials form with the correct address. The flows were then aborted without creating entries or submitting credentials. The adapter list was supplied explicitly for the WiFi interface; ADAR transport and controller replies were real.
 
-No API credentials, HTTP requests, network-configuration messages, recovery messages, firmware uploads or output commands were sent. Sanitized captured replies for both models are retained in `tests/fixtures/` for parsing, duplicate-response and selection-flow regression tests. This verifies discovery on this Windows network and firmware combination; Linux/container networking and authenticated setup on physical controllers still require separate verification.
+That discovery-only pass sent no API credentials, HTTP requests, network-configuration messages, recovery messages, firmware uploads or output commands. Sanitized captured replies for both models are retained in `tests/fixtures/` for parsing, duplicate-response and selection-flow regression tests. Subsequent authenticated setup, controls and simultaneous-instance checks are recorded in [multi-controller validation](multiple-controllers-validation.md). Linux/container networking and other firmware combinations remain unverified.
 
 ## Local validation
 
@@ -43,16 +43,17 @@ $env:PYTEST_DISABLE_PLUGIN_AUTOLOAD = '1'
 In a POSIX shell, use `export PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`. Run the same test command in either shell:
 
 ```sh
-python -m pytest -p pytest_asyncio.plugin -p pytest_cov.plugin tests/test_adar.py tests/test_adar_homeassistant.py tests/test_api.py tests/test_controls.py -q --cov=custom_components/advatek_pixlite --cov-report=term-missing
+python -m pytest -p pytest_asyncio.plugin -p pytest_cov.plugin tests -q --cov=custom_components/advatek_pixlite --cov-report=term-missing
 ```
 
 The ADAR tests mock interface socket configuration and use real UDP only on loopback. Home Assistant runtime tests use actual config managers, entity platforms and coordinator refreshes, with mocked controller responses, adapter enumeration and ADAR discovery. DNS uses a threaded resolver to avoid starting mDNS. No controller output commands are exercised by these runtime tests. The existing control tests use interface doubles, and the API tests use a loopback HTTP simulator.
 
-Lint and format checks for the changed Python files:
+Lint and format checks for the ADAR and HA runtime-test files:
 
 ```sh
-python -m ruff check --isolated --select E,F,I,UP --ignore E501 --target-version py314 custom_components/advatek_pixlite/_adar/__init__.py custom_components/advatek_pixlite/adar_flow.py custom_components/advatek_pixlite/discovery.py custom_components/advatek_pixlite/config_flow.py custom_components/advatek_pixlite/__init__.py custom_components/advatek_pixlite/entity.py tests/test_adar.py tests/test_adar_homeassistant.py
-python -m ruff format --isolated --check custom_components/advatek_pixlite/_adar/__init__.py custom_components/advatek_pixlite/adar_flow.py custom_components/advatek_pixlite/discovery.py custom_components/advatek_pixlite/config_flow.py custom_components/advatek_pixlite/__init__.py custom_components/advatek_pixlite/entity.py tests/test_adar.py tests/test_adar_homeassistant.py
+python -m ruff check --isolated --select E,F,I,UP --ignore E501 --target-version py314 custom_components/advatek_pixlite/_adar/__init__.py custom_components/advatek_pixlite/adar_flow.py custom_components/advatek_pixlite/discovery.py custom_components/advatek_pixlite/config_flow.py custom_components/advatek_pixlite/__init__.py custom_components/advatek_pixlite/entity.py tests/test_adar.py tests/test_adar_homeassistant.py tests/test_multiple_instances.py
+python -m ruff format --isolated --check custom_components/advatek_pixlite/_adar/__init__.py custom_components/advatek_pixlite/adar_flow.py custom_components/advatek_pixlite/discovery.py custom_components/advatek_pixlite/config_flow.py custom_components/advatek_pixlite/__init__.py custom_components/advatek_pixlite/entity.py tests/test_adar.py tests/test_adar_homeassistant.py tests/test_multiple_instances.py
+python -m ruff check --isolated --select E,F,UP --ignore E501 --target-version py314 custom_components/advatek_pixlite/coordinator.py tests/test_controls.py
 ```
 
 ## Standalone library and Core requirements

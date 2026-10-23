@@ -192,7 +192,7 @@ async def test_multi_command_actions_do_not_interleave(modules):
         await asyncio.sleep(0)
     client = SimpleNamespace(request=request)
     coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test"), client)
-    coordinator.async_request_refresh = AsyncMock()
+    coordinator.async_refresh = AsyncMock()
     await asyncio.gather(coordinator.commands([("color", {}), ("intensity", {})]), coordinator.command("pause"))
     assert requests == ["color", "intensity", "pause"]
 
@@ -201,11 +201,11 @@ async def test_multi_command_actions_do_not_interleave(modules):
 async def test_partial_command_failure_refreshes_without_retry(modules):
     client = SimpleNamespace(request=AsyncMock(side_effect=[{}, modules.coordinator.PixLiteError("rejected")]))
     coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test"), client)
-    coordinator.async_request_refresh = AsyncMock()
+    coordinator.async_refresh = AsyncMock()
     with pytest.raises(Exception, match="rejected"):
         await coordinator.commands([("color", {}), ("intensity", {})])
     assert client.request.await_count == 2
-    coordinator.async_request_refresh.assert_awaited_once()
+    coordinator.async_refresh.assert_awaited_once()
 
 
 @pytest.mark.asyncio

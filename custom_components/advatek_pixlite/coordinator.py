@@ -59,6 +59,6 @@ class PixLiteCoordinator(DataUpdateCoordinator):
                     await self.client.request(name, params)
         except PixLiteError as err:
             # An earlier command may have succeeded; reconcile partial success.
-            await self.async_request_refresh()
+            await self.async_refresh()
             raise HomeAssistantError(str(err)) from err
-        await self.async_request_refresh()
+        await self.async_refresh()
