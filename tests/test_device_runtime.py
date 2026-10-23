@@ -28,7 +28,7 @@ class Resolver(ThreadedResolver):
 
 
 @pytest_asyncio.fixture
-async def devices(tmp_path, unused_tcp_port):
+async def devices(tmp_path, unused_tcp_port, request, monkeypatch):
     """Configure two controllers with the same nickname through real config flows."""
     hass = HomeAssistant(str(tmp_path))
     loader.async_setup(hass)
@@ -41,6 +41,18 @@ async def devices(tmp_path, unused_tcp_port):
     await hass.config_entries.async_initialize()
     controllers = []
     runners = []
+    use_ssl = getattr(request, "param", False)
+    if use_ssl:
+        import ssl
+
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import ec, rsa
+        from test_advatek_tls import der, make_chain
+
+        from custom_components.advatek_pixlite._client import _tls
+
+        keys = (rsa.generate_private_key(65537, 2048), rsa.generate_private_key(65537, 2048), ec.generate_private_key(ec.SECP256R1()))
+        trusted = None
     for index, model in enumerate(("A4-S", "E16-S")):
         count = 4 if index == 0 else 16
         mac = f"e0b6f500000{index + 1}"
@@ -151,7 +163,24 @@ async def devices(tmp_path, unused_tcp_port):
         app.router.add_route("*", "/{path:.*}", handler)
         runner = web.AppRunner(app)
         await runner.setup()
-        site = web.TCPSite(runner, "127.0.0.1", 0)
+        context = None
+        if use_ssl:
+            import hashlib
+
+            certs, key = make_chain(keys, mac=mac)
+            if trusted is None:
+                trusted = certs[:2]
+                monkeypatch.setattr(_tls, "ROOT_PEM", certs[0].public_bytes(serialization.Encoding.PEM))
+                monkeypatch.setattr(_tls, "ROOT_SHA256", hashlib.sha256(der(certs[0])).hexdigest())
+            else:
+                certs[:2] = trusted
+            cert_file = tmp_path / f"{index}.pem"
+            key_file = tmp_path / f"{index}.key"
+            cert_file.write_bytes(b"".join(cert.public_bytes(serialization.Encoding.PEM) for cert in reversed(certs)))
+            key_file.write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.load_cert_chain(cert_file, key_file)
+        site = web.TCPSite(runner, "127.0.0.1", 0, ssl_context=context)
         await site.start()
         controller.port = site._server.sockets[0].getsockname()[1]
         runners.append(runner)
@@ -172,7 +201,8 @@ async def devices(tmp_path, unused_tcp_port):
                         "port": controller.port,
                         "username": "oper",
                         "password": "",
-                        "use_ssl": False,
+                        "use_ssl": use_ssl,
+                        "expected_mac": controller.mac if use_ssl else "",
                     },
                 )
                 assert result["type"] == "create_entry", result
@@ -197,6 +227,33 @@ async def service(hass, controller, domain, action, key, **data):
     await hass.services.async_call(
         domain, action, {"entity_id": controller.entities[key]} | data, blocking=True
     )
+
+
+@pytest.mark.parametrize("devices", [True], indirect=True)
+async def test_https_platforms_controls_reload_and_reconfigure(devices):
+    hass, (first, second) = devices
+    await test_all_platforms_capabilities_and_duplicate_names_are_isolated(devices)
+    await test_repeated_commands_publish_immediate_independent_state(devices)
+    peer = second.entry.runtime_data
+    context = {"source": "reconfigure", "entry_id": first.entry.entry_id}
+    data = dict(first.entry.data)
+    for mac, errors in (("invalid", {"expected_mac": "invalid_mac"}), (second.mac, {"base": "certificate_identity"})):
+        result = await hass.config_entries.flow.async_init("advatek_pixlite", context=context, data=data | {"expected_mac": mac})
+        assert result["type"] == "form", result
+        assert result["errors"] == errors
+        hass.config_entries.flow.async_abort(result["flow_id"])
+    result = await hass.config_entries.flow.async_init("advatek_pixlite", context=context, data=data)
+    assert result["type"] == "abort", result
+    await hass.async_block_till_done()
+    assert first.entry.data["expected_mac"] == first.mac
+    assert peer is second.entry.runtime_data
+    assert await hass.config_entries.async_reload(first.entry.entry_id)
+    await hass.async_block_till_done()
+    await peer.async_refresh()
+    assert peer.last_update_success
+    assert await hass.config_entries.async_unload(first.entry.entry_id)
+    await peer.async_refresh()
+    assert peer.last_update_success
 
 
 async def test_all_platforms_capabilities_and_duplicate_names_are_isolated(devices):

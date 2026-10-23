@@ -9,6 +9,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .api import (
     InvalidAuth,
     InvalidCertificate,
+    InvalidMAC,
     PixLiteClient,
     PixLiteError,
     UnsupportedDevice,
@@ -48,6 +49,8 @@ class PixLiteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data["host"] = normalize_host(data["host"])
                 client = PixLiteClient(async_get_clientsession(self.hass), **data)
                 await client.initialize()
+            except InvalidMAC:
+                errors["expected_mac"] = "invalid_mac"
             except ValueError:
                 errors["host"] = "invalid_host"
             except InvalidAuth:
@@ -93,6 +96,9 @@ class PixLiteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 probatio.Required(
                     "use_ssl", default=defaults.get("use_ssl", False)
                 ): bool,
+                probatio.Optional(
+                    "expected_mac", default=defaults.get("expected_mac", "")
+                ): str,
                 probatio.Optional(
                     "port",
                     **({"default": defaults["port"]} if defaults.get("port") is not None else {}),

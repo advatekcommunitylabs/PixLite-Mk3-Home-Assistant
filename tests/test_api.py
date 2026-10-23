@@ -2,6 +2,7 @@
 import asyncio
 import importlib.util
 from pathlib import Path
+import sys
 
 import aiohttp
 from aiohttp import web
@@ -10,6 +11,7 @@ import pytest_asyncio
 
 spec = importlib.util.spec_from_file_location("pixlite_api", Path(__file__).parents[1] / "custom_components/advatek_pixlite/_client/__init__.py")
 api = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = api
 spec.loader.exec_module(api)
 
 

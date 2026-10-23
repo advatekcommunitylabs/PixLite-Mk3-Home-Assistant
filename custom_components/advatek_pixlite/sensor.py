@@ -1,8 +1,8 @@
 """Controller health, playback, and per-output measurements."""
 
-import math
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
+import math
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import (

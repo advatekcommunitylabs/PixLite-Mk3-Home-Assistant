@@ -5,6 +5,7 @@ from typing import Any
 from advatek_pixlite_client import (
     InvalidAuth,
     InvalidCertificate,
+    InvalidMAC,
     PixLiteClient,
     PixLiteError,
     UnsupportedDevice,
@@ -43,6 +44,8 @@ class PixLiteConfigFlow(ConfigFlow, domain=DOMAIN):
                 data["host"] = normalize_host(data["host"])
                 client = PixLiteClient(async_get_clientsession(self.hass), **data)
                 await client.initialize()
+            except InvalidMAC:
+                errors["expected_mac"] = "invalid_mac"
             except ValueError:
                 errors["host"] = "invalid_host"
             except InvalidAuth:
@@ -76,6 +79,7 @@ class PixLiteConfigFlow(ConfigFlow, domain=DOMAIN):
                         TextSelectorConfig(type=TextSelectorType.PASSWORD)
                     ),
                     probatio.Required("use_ssl", default=False): bool,
+                    probatio.Optional("expected_mac", default=""): str,
                     probatio.Optional("port"): probatio.Port(),
                 }
             ),

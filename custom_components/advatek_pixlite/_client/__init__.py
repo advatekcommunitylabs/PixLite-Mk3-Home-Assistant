@@ -8,6 +8,14 @@ from typing import Any
 
 import aiohttp
 
+from ._tls import (
+    REQUEST_SECONDS,
+    AdvatekTLS,
+    CertificateError,
+    InvalidMAC as InvalidMAC,
+    normalize_mac,
+)
+
 
 class PixLiteError(Exception):
     """A transport, protocol or controller error."""
@@ -30,7 +38,7 @@ class InvalidCertificate(PixLiteError):
             message = "HTTPS certificate chain is not trusted. Obtain the Advatek root CA and configure trust in the Home Assistant runtime."
         elif verify_code in (62, 64):
             self.reason = "certificate_identity"
-            message = "HTTPS certificate identity does not match the controller address. Contact Advatek."
+            message = "HTTPS certificate identity does not match the configured controller. Check the MAC address against its label."
         elif verify_code == 26:
             self.reason = "certificate_purpose"
             message = "HTTPS certificate is not valid for TLS server authentication. Contact Advatek."
@@ -86,6 +94,7 @@ class PixLiteClient:
         password: str = "",
         use_ssl: bool = False,
         port: int | None = None,
+        expected_mac: str = "",
     ) -> None:
         self.session = session
         self.base_url = f"{'https' if use_ssl else 'http'}://{normalize_host(host)}:{port or (4443 if use_ssl else 80)}"
@@ -93,6 +102,8 @@ class PixLiteClient:
         self.lock = asyncio.Lock()
         self.version: dict[str, Any] = {}
         self.constants: dict[str, Any] = {}
+        self.expected_mac = normalize_mac(expected_mac) if expected_mac else ""
+        self._tls = AdvatekTLS(normalize_host(host), port or 4443, self.expected_mac) if use_ssl and self.expected_mac else None
 
     async def _exchange(
         self, method: str, path: str, body: dict[str, Any] | None = None
@@ -100,27 +111,36 @@ class PixLiteClient:
         # One outstanding request per controller, including UI actions and polling.
         async with self.lock:
             try:
-                async with self.session.request(
-                    method,
-                    self.base_url + path,
-                    params=self.auth if method == "POST" else None,
-                    json=body,
-                    timeout=aiohttp.ClientTimeout(total=10),
-                    headers={"Connection": "close"},
-                    allow_redirects=False,
-                ) as response:
-                    if response.status in (401, 403):
-                        raise InvalidAuth("Controller rejected credentials")
-                    if response.status != 200:
-                        raise PixLiteError(
-                            f"Controller returned HTTP {response.status}"
-                        )
-                    data = await response.json()
+                async with asyncio.timeout(REQUEST_SECONDS):
+                    fingerprint = await self._tls.fingerprint(self.session) if self._tls else None
+                    async with self.session.request(
+                        method,
+                        self.base_url + path,
+                        params=self.auth if method == "POST" else None,
+                        json=body,
+                        timeout=aiohttp.ClientTimeout(total=REQUEST_SECONDS),
+                        headers={"Connection": "close"},
+                        allow_redirects=False,
+                        **({"ssl": fingerprint, "middlewares": ()} if self._tls else {}),
+                    ) as response:
+                        if response.status in (401, 403):
+                            raise InvalidAuth("Controller rejected credentials")
+                        if response.status != 200:
+                            raise PixLiteError(
+                                f"Controller returned HTTP {response.status}"
+                            )
+                        data = await response.json()
+            except CertificateError as err:
+                raise InvalidCertificate(err.verify_code) from None
+            except aiohttp.ServerFingerprintMismatch:
+                if self._tls:
+                    self._tls.invalidate()
+                raise InvalidCertificate() from None
             except aiohttp.ClientConnectorCertificateError as err:
                 raise InvalidCertificate(
                     getattr(err.certificate_error, "verify_code", None)
                 ) from None
-            except aiohttp.ClientError, TimeoutError, ValueError:
+            except aiohttp.ClientError, OSError, TimeoutError, ValueError:
                 # Do not expose exception URLs: authentication is in the query string.
                 raise PixLiteError("Unable to communicate with controller") from None
         if not isinstance(data, dict):
@@ -179,6 +199,8 @@ class PixLiteClient:
         if not isinstance(dev, dict) or dev.get("prodFamilyName") != "PixLite Mk3":
             raise UnsupportedDevice("Expected a PixLite Mk3 with a MAC address")
         _controller_identity(self.constants)
+        if self.expected_mac and self.unique_id != self.expected_mac:
+            raise InvalidCertificate(62)
         return self.constants
 
     @property

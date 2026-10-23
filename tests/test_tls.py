@@ -3,6 +3,7 @@
 import importlib.util
 from pathlib import Path
 import ssl
+import sys
 
 import aiohttp
 from aiohttp import web
@@ -16,6 +17,7 @@ spec = importlib.util.spec_from_file_location(
     Path(__file__).parents[1] / "custom_components/advatek_pixlite/_client/__init__.py",
 )
 api = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = api
 spec.loader.exec_module(api)
 FIXTURES = Path(__file__).parent / "fixtures/tls"
 
@@ -87,6 +89,16 @@ async def test_rejected_tls_sends_no_http_or_credentials(tls_controller, trusted
         assert "fixture-secret" not in str(error.value)
         assert api.password_hash("fixture-secret") not in str(error.value)
         assert error.value.__suppress_context__
+    assert not requests
+
+
+@pytest.mark.parametrize("tls_controller", ["valid"], indirect=True)
+async def test_caller_pin_mismatch_without_vendor_profile_is_a_certificate_error(tls_controller):
+    port, requests = tls_controller
+    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=aiohttp.Fingerprint(bytes(32)))) as session:
+        client = api.PixLiteClient(session, "127.0.0.1", "oper", "fixture-secret", use_ssl=True, port=port)
+        with pytest.raises(api.InvalidCertificate):
+            await client.initialize()
     assert not requests
 
 
