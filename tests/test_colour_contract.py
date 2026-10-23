@@ -217,3 +217,18 @@ async def test_raw_channel_service_boundaries_at_zero_intensity(colour_runtime, 
     )
     assert data["status"]["params"]["color"] == [100, 200, 300, 400, value]
     assert data["status"]["outInt"][0]["fc"][1] == 0
+
+
+async def test_rgb_status_with_unused_white_reports_colour_and_black(colour_runtime):
+    """Read the RGB status shape observed on the physical E16."""
+    hass, coordinator, client, data, pixels, channel = colour_runtime
+    data["config"]["pix"]["colorType"] = "RGB"
+    data["status"]["params"]["color"] = [47802, 12336, 65535, 0]
+    await coordinator.async_refresh()
+    assert pixels.rgb_color == (186, 48, 255)
+    assert hass.states.get(pixels.entity_id).attributes["rgb_color"] == (186, 48, 255)
+    data["status"]["params"]["color"] = [0, 0, 0, 65535]
+    await coordinator.async_refresh()
+    assert hass.states.get(pixels.entity_id).state == "off"
+    await hass.services.async_call("light", "turn_on", {"entity_id": pixels.entity_id, "brightness": 17}, blocking=True)
+    assert data["status"]["params"]["color"] == [65535, 65535, 65535]

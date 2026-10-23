@@ -7,6 +7,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.advatek_pixlite.api import (
     InvalidAuth,
+    InvalidCertificate,
     PixLiteError,
     UnsupportedDevice,
 )
@@ -45,6 +46,11 @@ async def test_user_flow(
         (InvalidAuth("Rejected"), "invalid_auth"),
         (UnsupportedDevice("Unsupported"), "unsupported_device"),
         (PixLiteError("Offline"), "cannot_connect"),
+        (InvalidCertificate(20), "certificate_untrusted"),
+        (InvalidCertificate(64), "certificate_identity"),
+        (InvalidCertificate(26), "certificate_purpose"),
+        (InvalidCertificate(10), "certificate_validity"),
+        (InvalidCertificate(), "certificate_invalid"),
     ],
 )
 async def test_connection_error_and_recovery(

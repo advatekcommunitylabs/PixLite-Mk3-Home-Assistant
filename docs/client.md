@@ -7,3 +7,5 @@ Build a wheel and source distribution from the repository root with `python -m b
 Version 0.1.0 is a proposed first release, not an existing PyPI release. Do not publish it or add it to an upstream requirement until the source, release contents and license have been reviewed. Publication requires an agreed OSI-approved license, a public source repository and issue tracker, a matching release tag, and a public CI build and publication workflow. No license grant or release approval is asserted by this preparation.
 
 The library uses a caller-owned aiohttp session, serializes HTTP requests, checks API v1.9 support, authenticates with the controller's password-hash query format, and returns controller objects. It does not configure Home Assistant, install entities, or manage Home Assistant state.
+
+`InvalidCertificate` is a `PixLiteError` subclass for failed HTTPS certificate verification. Its `reason` identifies a fixed trust, identity, purpose, validity or generic certificate error without exposing peer-controlled certificate text or credential-bearing URLs. It does not modify the caller's TLS policy or retry over HTTP.

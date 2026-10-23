@@ -8,6 +8,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import (
     InvalidAuth,
+    InvalidCertificate,
     PixLiteClient,
     PixLiteError,
     UnsupportedDevice,
@@ -51,6 +52,8 @@ class PixLiteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["host"] = "invalid_host"
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
+            except InvalidCertificate as err:
+                errors["base"] = err.reason
             except UnsupportedDevice:
                 errors["base"] = "unsupported_device"
             except PixLiteError:

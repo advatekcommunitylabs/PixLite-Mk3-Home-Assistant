@@ -16,7 +16,7 @@
 
 Shared identity, configuration, protocol and file-refresh fixes are also backported to the separate ADAR PR #3. The colour restoration change belongs to PR #2. PR #3 alone retains its older colour implementation and must not be treated as the combined feature release.
 
-## Verification
+## Original safety-audit verification
 
 Python 3.14.2 and Home Assistant 2026.10.2 on Windows. All checks were local; GitHub Actions remains disabled.
 
@@ -36,16 +36,33 @@ Python 3.14.2 and Home Assistant 2026.10.2 on Windows. All checks were local; Gi
 | Setup and lifecycle | Multiple entries, default-port form round trip, independent failure/recovery, reload/unload without stopping the peer |
 | ADAR | Separate shared scanner, verified device identities and authenticated API setup; discovery-only protocol operations |
 
-## Current physical check
+## Earlier read-only physical check
 
 The combined candidate discovered both physical controllers through ADAR and authenticated two real HA entries. The A4 reported RGBWX with **38 registered entities**, and the E16 RGB with **27**. Both loaded all seven platforms with disjoint entity IDs and the expected hardware capability filtering. Three simultaneous polling cycles, entry reload, peer polling after unload, and final scanner shutdown passed.
 
 The physical check issued **48 read-only API requests**. A transport guard rejected every request outside constant/config/status/statistic reads and file listing. No operating controls, IP configuration, recovery, firmware, reboot, uploads or deletions were performed in this audit. Output commands, address substitution and partial failures were tested against HTTP simulators. Earlier physical operating tests are separate evidence and do not qualify the final changes automatically.
 
+## Reconnected paired bench, 23 October 2026
+
+The restored network exposed two additional issues. This follow-up was implemented and tested by the primary AI agent; the earlier independent audit does not cover these new changes.
+
+- The RGB E16 returns four colour values, including unused W, even after a three-channel RGB write. Both controllers also store five-value palettes. The readers now validate the complete reported vectors and ignore channels outside the configured pixel type, so RGB palette recall remains usable. Missing required channels and malformed values remain rejected. Outbound vectors still require the exact configured channel count. API v1.9 Table 46 (page 79) limits the use of W/X to the corresponding pixel types.
+- Verified HTTPS on port 4443 fails on both controllers with Python certificate verification code 20 under the default HA trust store. The client and setup flows now report fixed certificate-specific errors instead of masking this as a generic connection failure. No verification bypass, trust-store changes or HTTP fallback was introduced.
+
+The current feature source passed **195 local tests** on Python 3.14.2 / HA 2026.10.2. Eight localhost TLS cases cover verified initialization/authentication, rejection before HTTP data for an untrusted issuer, wrong address, unsuitable purpose and expiry, plus documented default/override ports. Synthetic TLS fixtures contain no controller certificates or credentials. The Linux-specific custom-component pytest plugin cannot run on this Windows host; those separate contribution tests remain unqualified here. The earlier 96% coverage figure applies to the previous safety audit, not this follow-up revision.
+
+The final paired physical feature run passed **34 stages**, recording **798 client exchanges including 69 operating writes**. It verified distinct RGB/RGBWX colours, raw W/X edits, preserved X during picker changes, independent brightness, restoration from Blank/black, preserved Live/File playback, palette recall, auxiliary intensity/priority, freeze, extensionless scene/playlist routing, button and media-player transport, restart, file refresh, browser labels and reload/unload isolation. Next/previous/restart required repeated status observations within a two-second bound; test tooling repeated only reads, never dispatched writes. The normal HA polling schedule is unchanged. The bench transport guard added independent MAC checks and an operation allowlist, so these counts are test traffic rather than a normal polling-rate estimate.
+
+Earlier halted attempts and their restoration traces were retained. One exposed the real palette-length rejection; the other expected an RGB status vector of three values instead of the four returned by the controller. Both attempts restored the agreed Live baseline before a new run.
+
+Both controllers were read back in the agreed temporary Live state with Pixel priority Hi/factor 255 and Aux priority Lo/factor 255. HA processes and polling were stopped before releasing exclusive access. Existing media and Node-RED-owned fixtures were not modified. The shared coordinator subsequently removed its owned test files and restored both original colours. A final **77-exchange read-only HA check** verified the E16's padded RGB state as `(186, 48, 255)`, the A4's original green, parallel polling and reload/unload isolation. HA was stopped again before releasing the bench.
+
+The separate ADAR source passed **233 local tests**, then discovered both physical MACs and completed real discovery-confirm flows, three simultaneous polling cycles and reload/unload isolation with **77 read-only client exchanges**. Both branches' actual HA setup flows returned the specific `certificate_untrusted` error for the physical HTTPS failure. These checks qualify the failure handling, not successful hardware HTTPS. The final check also loaded an authenticated Advatek root into a separate in-memory stock Python context with certificate and hostname verification retained. Both controllers then failed purpose verification (code 26), so CA trust alone does not qualify this hardware path. The root matched an independently extracted copy from the Valid Authenticode-signed Advatek Assistant 1.1.4 installer; no production CA or proprietary code was bundled. A reviewed device-specific TLS profile, supported Linux checks, human review and emitted-light qualification remain open.
+
 ## Remaining release limits
 
 - A MAC read and a later output write are separate protocol operations. The guard reduces accidental address substitution risk; it cannot guarantee atomic identity binding or protect against a device impersonating the same MAC.
-- Repeat verification against the final merged/rebased revision and a supported Linux installation. Physical output changes for the final revision, RGBW installations, other model/firmware combinations, routed/multiple-interface discovery and endurance remain qualification work.
+- Repeat verification against the final merged/rebased revision and a supported Linux installation. RGBW installations, other model/firmware combinations, routed/multiple-interface discovery and endurance remain qualification work.
 - The staged `core/` candidate is monitoring-only. This audit does not add its missing reauthentication/reconfiguration flows or qualify it for Gold. Public dependency licensing/releases, target Core checks, scope separation and human review remain required before upstream submission.
 - RGBWX is not advertised as calibrated RGBWW or Kelvin/CCT control. API acceptance is not emitted-light calibration evidence.
 

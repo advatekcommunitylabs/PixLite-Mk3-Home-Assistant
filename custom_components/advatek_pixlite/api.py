@@ -2,6 +2,7 @@
 
 from ._client import (
     InvalidAuth,
+    InvalidCertificate,
     PixLiteClient,
     PixLiteError,
     UnsupportedDevice,
@@ -11,6 +12,7 @@ from ._client import (
 
 __all__ = [
     "InvalidAuth",
+    "InvalidCertificate",
     "PixLiteClient",
     "PixLiteError",
     "UnsupportedDevice",

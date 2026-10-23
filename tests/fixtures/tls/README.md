@@ -1,0 +1,1 @@
+Synthetic localhost TLS fixtures for transport tests. The CA, certificates and server private key were generated for these tests and contain no Advatek device material. The test CA private key is not retained. Valid leaves expire in 2045; regenerate the fixtures before then.

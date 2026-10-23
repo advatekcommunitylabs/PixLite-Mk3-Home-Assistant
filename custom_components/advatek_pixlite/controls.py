@@ -66,17 +66,23 @@ def solid_color(data):
     resolution = params.get("colorRes", "8Bit")
     if resolution not in ("8Bit", "16Bit") or not isinstance(color, (list, tuple)):
         return None
+    count = color_channel_count(data)
+    if count is None or len(color) not in (3, 4, 5) or len(color) < count:
+        return None
     maximum = 255 if resolution == "8Bit" else 65535
     if any(type(value) is not int or not 0 <= value <= maximum for value in color):
         return None
     scale = 257 if resolution == "8Bit" else 1
     try:
-        return validate_color(data, tuple(value * scale for value in color))
+        return validate_color(data, tuple(value * scale for value in color[:count]))
     except ValueError:
         return None
 
 
 def palette(data):
+    count = color_channel_count(data)
+    if count is None:
+        return []
     interface = data.get("config", {}).get("operIf", {})
     resolution = interface.get("colorRes", "8Bit")
     colors = interface.get("pal", [])
@@ -86,11 +92,11 @@ def palette(data):
     scale = 257 if resolution == "8Bit" else 1
     result = []
     for color in colors[:12]:
-        if not isinstance(color, (list, tuple)) or any(
+        if not isinstance(color, (list, tuple)) or len(color) not in (3, 4, 5) or len(color) < count or any(
             type(value) is not int or not 0 <= value <= maximum for value in color
         ):
             return []
-        result.append(tuple(value * scale for value in color))
+        result.append(tuple(value * scale for value in color[:count]))
     return result
 
 

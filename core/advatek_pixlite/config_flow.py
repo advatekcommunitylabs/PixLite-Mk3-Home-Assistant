@@ -4,6 +4,7 @@ from typing import Any
 
 from advatek_pixlite_client import (
     InvalidAuth,
+    InvalidCertificate,
     PixLiteClient,
     PixLiteError,
     UnsupportedDevice,
@@ -46,6 +47,8 @@ class PixLiteConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["host"] = "invalid_host"
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
+            except InvalidCertificate as err:
+                errors["base"] = err.reason
             except UnsupportedDevice:
                 errors["base"] = "unsupported_device"
             except PixLiteError:

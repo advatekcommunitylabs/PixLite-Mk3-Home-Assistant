@@ -480,8 +480,10 @@ async def test_malformed_x_is_not_overwritten_by_picker(modules, coordinator, re
 @pytest.mark.asyncio
 async def test_palette_channel_mismatch_is_rejected(modules, coordinator):
     coordinator.data["config"]["pix"]["colorType"] = "RGBWX"
-    with pytest.raises(Exception, match="configured pixel channels"):
-        await modules.select.PaletteSelect(coordinator, "palette", "Palette").async_select_option("Preset 1")
+    entity = modules.select.PaletteSelect(coordinator, "palette", "Palette")
+    assert entity.options == []
+    with pytest.raises(Exception, match="no longer available"):
+        await entity.async_select_option("Preset 1")
     coordinator.commands.assert_not_awaited()
 
 
@@ -563,6 +565,53 @@ async def test_missing_configuration_blocks_colour_writes(modules, coordinator, 
     with pytest.raises(Exception, match="missing or unsupported"):
         await entity.async_turn_on(rgb_color=(1, 2, 3))
     coordinator.commands.assert_not_awaited()
+
+
+@pytest.mark.parametrize("kind,color,expected", [
+    ("RGB", [47802, 12336, 65535, 0], (47802, 12336, 65535)),
+    ("RGB", [0, 0, 0, 123, 456], (0, 0, 0)),
+    ("RGBW", [1, 2, 3, 4, 5], (1, 2, 3, 4)),
+    ("RGBWX", [1, 2, 3, 4], None),
+    ("RGB", [1, 2, 3, 4, 5, 6], None),
+    ("RGB", [1, 2, 3, -1], None),
+])
+def test_colour_status_ignores_only_unused_valid_channels(modules, coordinator, kind, color, expected):
+    coordinator.data["config"]["pix"]["colorType"] = kind
+    coordinator.data["status"]["params"] = {"op": "Color", "color": color, "colorRes": "16Bit"}
+    assert modules.controls.solid_color(coordinator.data) == expected
+
+
+@pytest.mark.asyncio
+async def test_unused_status_channels_do_not_relax_outbound_validation(modules, coordinator):
+    coordinator.data["status"]["params"] = {"op": "Color", "color": [1, 2, 3, 0], "colorRes": "16Bit"}
+    with pytest.raises(ValueError, match="configured pixel channels"):
+        modules.controls.validate_color(coordinator.data, [1, 2, 3, 0])
+    with pytest.raises(Exception, match="configured pixel channels"):
+        await modules.light.PixLiteLight(coordinator).async_turn_on(rgbw_color=(1, 2, 3, 4))
+    coordinator.commands.assert_not_awaited()
+
+
+@pytest.mark.parametrize("kind,color,expected", [
+    ("RGB", [255, 0, 0, 0, 0], [(65535, 0, 0)]),
+    ("RGBW", [1, 2, 3, 4, 5], [(257, 514, 771, 1028)]),
+    ("RGBWX", [1, 2, 3, 4, 5], [(257, 514, 771, 1028, 1285)]),
+    ("RGBW", [1, 2, 3], []),
+    ("RGBWX", [1, 2, 3, 4], []),
+    ("RGB", [1, 2, 3, 4, 5, 6], []),
+    ("RGB", [1, 2, 3, 4, 256], []),
+])
+@pytest.mark.asyncio
+async def test_palette_uses_only_complete_configured_channels(modules, coordinator, kind, color, expected):
+    coordinator.data["config"]["pix"]["colorType"] = kind
+    coordinator.data["config"]["operIf"].update(pal=[color], colorRes="8Bit")
+    entity = modules.select.PaletteSelect(coordinator, "palette", "Palette")
+    assert modules.controls.palette(coordinator.data) == expected
+    if expected:
+        await entity.async_select_option("Preset 1")
+        assert coordinator.commands.call_args.args[0][0][1]["color"] == list(expected[0])
+    else:
+        assert entity.options == []
+        coordinator.commands.assert_not_awaited()
 
 
 @pytest.mark.parametrize("failure_index", [0, 1])
