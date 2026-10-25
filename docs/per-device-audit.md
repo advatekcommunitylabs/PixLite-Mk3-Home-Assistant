@@ -77,6 +77,12 @@ A subsequent [Windows investigation](windows-cleanup.md) confirmed skipped clean
 
 Before commit, the coordinator independently read back the full original Color parameters, configuration, intensity factors/priorities, identify state and complete media inventories (16 A4 files, two E16 files), confirming all temporary fixtures absent at 13:40:58 UTC on 23 October 2026. A separate AI reviewer rechecked the saved live report, recomputed baseline equality and verified all source hashes, finding no blocker for this scoped draft change. Supported Linux, endurance and human review remain release gates.
 
+## Isolated Windows cleanup candidate, 25 October 2026
+
+A fresh read-only A4/E16 run under the [isolated CPython cleanup candidate](windows-cleanup.md#isolated-runtime-candidate-25-october-2026) passed actual HA setup, all seven platforms, native entity-enable reloads, three paired polling cycles and reload/unload isolation. It completed 107 logical invocations, including two expected wrong-MAC refusals, in 62.7 seconds. All 116 tracked HA-owned TLS transports closed and completed cleanup while strong references remained held. No callback error or reset-cleanup warning occurred. The A4 red Color/E16 Live baselines, operating parameters, programmed factors/priorities, Identify, full configuration and scene/playlist metadata hashes were preserved. All owned test processes stopped before explicit coordinator release.
+
+This was a bounded physical observation with an isolated runtime, without reset injection or device writes. User device SPAs remained open; global TCP quiet, raw media contents and endurance were not qualified. Installed Python and integration production sources are unchanged. Supported deployment of the runtime correction remains open and PR #2 remains draft. Independent AI review is evidence review, not independent physical execution or human certification.
+
 ## Remaining release limits
 
 - Over HTTP, a MAC read and a later output write are separate protocol operations. That guard reduces accidental address substitution risk but cannot prevent deliberate MAC impersonation. The opted-in HTTPS profile additionally binds each API connection to the Advatek-signed certificate for the provisioned MAC; compromised device keys or CAs remain outside that guarantee.
