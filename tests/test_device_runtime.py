@@ -102,6 +102,9 @@ async def devices(tmp_path, unused_tcp_port, request, monkeypatch):
             fail_read=False,
             fail_command=None,
             replace_after_write=False,
+            version={"nickname": "Shared name", "apiVer": [{"maj": "v1", "min": [0, 9]}]},
+            error_request=None,
+            error_envelope=None,
         )
 
         async def handler(request, controller=controller):
@@ -109,16 +112,15 @@ async def devices(tmp_path, unused_tcp_port, request, monkeypatch):
                 return web.json_response(
                     {
                         "resp": "version",
-                        "result": {
-                            "nickname": "Shared name",
-                            "apiVer": [{"maj": "v1", "min": [0, 9]}],
-                        },
+                        "result": controller.version,
                     }
                 )
             assert request.query["user"] == "oper"
             body = await request.json()
             controller.requests.append(deepcopy(body))
             name, params = body["req"], body.get("params")
+            if controller.error_request == name:
+                return web.json_response({"resp": name, "err": deepcopy(controller.error_envelope)})
             if controller.fail_read and name.endswith("Read"):
                 return web.Response(status=503)
             if name.endswith("Read"):
@@ -227,6 +229,55 @@ async def service(hass, controller, domain, action, key, **data):
     await hass.services.async_call(
         domain, action, {"entity_id": controller.entities[key]} | data, blocking=True
     )
+
+
+@pytest.mark.parametrize("stage", ["flow", "setup", "poll", "command"])
+async def test_error_envelope_is_sanitized_through_real_ha(devices, stage, caplog):
+    hass, (first, second) = devices
+    client = first.entry.runtime_data.client
+    auth = client.auth["auth"]
+    url = f"{client.base_url}/v1.9/?user=oper&auth={auth}"
+    first.error_envelope = {"code": {"request_url": url}, "msg": url}
+    first.error_request = "constantRead" if stage in {"flow", "setup"} else ("statusRead" if stage == "poll" else "modePlayback")
+    if stage == "flow":
+        result = await hass.config_entries.flow.async_init("advatek_pixlite", context={"source": "user"}, data=dict(first.entry.data))
+        assert result["errors"] == {"base": "cannot_connect"}
+        hass.config_entries.flow.async_abort(result["flow_id"])
+    elif stage == "setup":
+        assert await hass.config_entries.async_unload(first.entry.entry_id)
+        assert not await hass.config_entries.async_setup(first.entry.entry_id)
+        await hass.async_block_till_done()
+    elif stage == "poll":
+        await first.entry.runtime_data.async_refresh()
+        assert not first.entry.runtime_data.last_update_success
+        assert str(first.entry.runtime_data.last_exception) == "Invalid controller error response"
+    else:
+        with pytest.raises(HomeAssistantError, match="^Invalid controller error response$"):
+            await service(hass, first, "button", "press", "blank")
+    assert auth not in caplog.text
+    assert url not in caplog.text
+    await second.entry.runtime_data.async_refresh()
+    assert second.entry.runtime_data.last_update_success
+
+
+@pytest.mark.parametrize("stage", ["flow", "setup"])
+@pytest.mark.parametrize("field,value", [("prodName", None), ("prodName", []), ("prodName", " "), ("nickname", None), ("nickname", [])])
+async def test_malformed_metadata_is_sanitized_through_real_ha(devices, stage, field, value):
+    hass, (first, second) = devices
+    if field == "nickname":
+        first.version[field] = value
+    else:
+        first.data["constant"]["dev"][field] = value
+    if stage == "flow":
+        result = await hass.config_entries.flow.async_init("advatek_pixlite", context={"source": "user"}, data=dict(first.entry.data))
+        assert result["errors"] == {"base": "cannot_connect"}
+        hass.config_entries.flow.async_abort(result["flow_id"])
+    else:
+        assert await hass.config_entries.async_unload(first.entry.entry_id)
+        assert not await hass.config_entries.async_setup(first.entry.entry_id)
+        await hass.async_block_till_done()
+    await second.entry.runtime_data.async_refresh()
+    assert second.entry.runtime_data.last_update_success
 
 
 @pytest.mark.parametrize("devices", [True], indirect=True)

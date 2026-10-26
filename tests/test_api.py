@@ -27,7 +27,7 @@ async def controller():
             if request.method == "GET":
                 assert request.path == "/ver"
                 assert not request.query
-                return web.json_response({"resp": "version", "result": {"apiVer": state.get("versions", [{"maj": "v1", "min": state["minor"]}])}})
+                return web.json_response({"resp": "version", "result": state.get("version", {"apiVer": state.get("versions", [{"maj": "v1", "min": state["minor"]}])})})
             assert request.path == "/v1.9/"
             body = await request.json()
             assert next(iter(body)) == "req"
@@ -37,10 +37,12 @@ async def controller():
             if state["http"] != 200:
                 return web.Response(status=state["http"])
             response = {"resp": body["req"]}
-            if state["error"]:
+            if "error_envelope" in state:
+                response["err"] = state["error_envelope"]
+            elif state["error"]:
                 response["err"] = {"code": state["error"], "msg": "test"}
             elif body["req"] == "constantRead":
-                response["result"] = {"constant": {"dev": {"prodFamilyName": "PixLite Mk3", "macAddr": state.get("mac", "AC-DE-48-00-00-80")}}}
+                response["result"] = {"constant": state.get("constants", {"dev": {"prodFamilyName": "PixLite Mk3", "prodName": "PixLite Mk3", "macAddr": state.get("mac", "AC-DE-48-00-00-80")}})}
             elif body["req"] == "fileList":
                 response["result"] = {"files": [{"file": "Rainbow.scn"}, {"file": "Loop.pl"}, {"file": "notes.txt"}]}
             elif body["req"] == "statusRead":
@@ -168,3 +170,65 @@ async def test_intensity_and_color_wire_format(controller):
     await client.request("modePlayback", {"op": "Color", "color": [65535, 0, 0, 1000, 2000], "colorRes": "16Bit", "fadeMs": 2000})
     assert list(state["requests"][0]["params"]["item"][0]) == ["out", "op", "fc", "durMs"]
     assert list(state["requests"][1]["params"]) == ["op", "color", "colorRes", "fadeMs"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["null", "string", "list", "missing_code", "null_code", "string_code", "list_code", "object_code", "true", "false", "float"])
+async def test_malformed_error_envelopes_are_sanitized(controller, kind):
+    client, state = controller
+    url = f"{client.base_url}/v1.9/?user=oper&auth={client.auth['auth']}"
+    state["error_envelope"] = {
+        "null": None, "string": url, "list": [url], "missing_code": {"msg": url},
+        "null_code": {"code": None}, "string_code": {"code": url},
+        "list_code": {"code": [url]}, "object_code": {"code": {"url": url}},
+        "true": {"code": True}, "false": {"code": False}, "float": {"code": 10.0},
+    }[kind]
+    with pytest.raises(api.PixLiteError) as caught:
+        await client.read("status")
+    assert caught.value.args == ("Invalid controller error response",)
+    assert caught.value.code is None
+    assert client.auth["auth"] not in str(caught.value)
+
+
+@pytest.mark.asyncio
+async def test_unknown_integer_error_ignores_server_message(controller):
+    client, state = controller
+    state["error_envelope"] = {"code": 123456, "msg": f"http://controller/?auth={client.auth['auth']}"}
+    with pytest.raises(api.PixLiteError) as caught:
+        await client.read("status")
+    assert caught.value.code == 123456
+    assert str(caught.value) == "Controller rejected statusRead (code 123456)"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field,value", [("prodName", None), ("prodName", 1), ("prodName", []), ("prodName", {}), ("prodName", False), ("prodName", ""), ("prodName", " "), ("nickname", None), ("nickname", 1), ("nickname", []), ("nickname", {}), ("nickname", False), ("ver", None), ("ver", []), ("ver", 1)])
+async def test_invalid_metadata_does_not_publish_constants(controller, field, value):
+    client, state = controller
+    await client.initialize()
+    before = client.constants
+    if field == "nickname":
+        state["version"] = {"apiVer": [{"maj": "v1", "min": [0, 9]}], "nickname": value}
+    else:
+        state["constants"] = {"dev": dict(before["dev"])}
+        if field == "ver":
+            state["constants"]["ver"] = value
+        else:
+            state["constants"]["dev"][field] = value
+    with pytest.raises(api.PixLiteError):
+        await client.initialize()
+    assert client.constants is before
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("missing", ["apiVer", "prodName"])
+async def test_missing_metadata_is_a_protocol_error(controller, missing):
+    client, state = controller
+    if missing == "apiVer":
+        state["version"] = {}
+    else:
+        state["constants"] = {"dev": {"prodFamilyName": "PixLite Mk3", "macAddr": "AC-DE-48-00-00-80"}}
+    expected = "Invalid API version response" if missing == "apiVer" else "Invalid controller product name"
+    with pytest.raises(api.PixLiteError, match=f"^{expected}$") as caught:
+        await client.initialize()
+    assert type(caught.value) is api.PixLiteError
+    assert client.constants == {}

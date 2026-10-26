@@ -83,6 +83,10 @@ A fresh read-only A4/E16 run under the [isolated CPython cleanup candidate](wind
 
 This was a bounded physical observation with an isolated runtime, without reset injection or device writes. User device SPAs remained open; global TCP quiet, raw media contents and endurance were not qualified. Installed Python and integration production sources are unchanged. Supported deployment of the runtime correction remains open and PR #2 remains draft. Independent AI review is evidence review, not independent physical execution or human certification.
 
+## Reconciled client verification, 26 October 2026
+
+The client validation reviewed in Sam's PR #1 was reconciled with this branch and verified before commit. The candidate passed 307 offline tests, two tightened missing-field cases and a fresh read-only paired A4/E16 actual HA run. All 116 tracked TLS transports completed cleanup under the isolated runtime, both fresh baselines were preserved, and all owned processes stopped. The [verification record](reviews/2026-10-26-reconciled-client-verification.md) gives exact source identities, evidence and limits. This does not close supported runtime deployment or repeat operating-control qualification. PR #2 remains draft.
+
 ## Remaining release limits
 
 - Over HTTP, a MAC read and a later output write are separate protocol operations. That guard reduces accidental address substitution risk but cannot prevent deliberate MAC impersonation. The opted-in HTTPS profile additionally binds each API connection to the Advatek-signed certificate for the provisioned MAC; compromised device keys or CAs remain outside that guarantee.

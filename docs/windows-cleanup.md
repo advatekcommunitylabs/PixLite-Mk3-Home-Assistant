@@ -44,4 +44,8 @@ The test observed 116 HA-owned real TLS transports (60 A4, 56 E16). After HA sto
 
 This physical run used no synthetic reset injection. It verifies observed cleanup under the candidate on both devices; it does not reproduce the original reset timing, identify its original socket, qualify endurance or verify raw media contents. The tested candidate `proactor_events.py` SHA-256 is `1180abffc010ce51d0188e9b0419d113e38cac76545bdf95e14ee1fd07797469`; the integration source digest remains `aa87cbc5971e7fb07a502bb162a8c5f33a99b1a5dd308310491d496c5e9986f1`.
 
-The candidate is not installed, bundled with the integration or submitted upstream. Supported runtime deployment remains open. PR #2 stays draft, GitHub Actions stays disabled, and Linux checks remain cancelled. No files were deleted during this follow-up.
+The candidate is not installed, bundled with the integration or submitted upstream. Supported runtime deployment remains open. PR #2 stays draft, no CI was dispatched by this task, and Linux checks remain cancelled. No files were deleted during this follow-up.
+
+## Reconciled client follow-up, 26 October 2026
+
+A fresh read-only paired A4/E16 run verified the client reconciled with Sam's PR #1 under the same isolated runtime. Both actual HA entries passed setup, polling and reload/unload isolation; all 116 tracked TLS transports completed cleanup. Raw configuration and catalogue responses were retained privately and their matching before/after hashes independently recomputed. The [verification record](reviews/2026-10-26-reconciled-client-verification.md) records the 64.3-second run, source digest, preserved state and limits. Installed Python remains unchanged, and supported deployment of the runtime correction remains unresolved.

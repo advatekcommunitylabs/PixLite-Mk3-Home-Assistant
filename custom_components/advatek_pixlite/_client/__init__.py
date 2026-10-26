@@ -150,7 +150,9 @@ class PixLiteClient:
             raise PixLiteError("Unexpected response type")
         if "err" in data:
             error = data["err"]
-            code = error.get("code") if isinstance(error, dict) else None
+            if not isinstance(error, dict) or type(error.get("code")) is not int:
+                raise PixLiteError("Invalid controller error response")
+            code = error["code"]
             raise PixLiteError(f"Controller rejected {expected} (code {code})", code)
         result = data.get("result", {})
         if not isinstance(result, dict):
@@ -176,7 +178,9 @@ class PixLiteClient:
 
     async def initialize(self) -> dict[str, Any]:
         self.version = await self._exchange("GET", "/ver")
-        versions = self.version.get("apiVer", [])
+        versions = self.version.get("apiVer")
+        if "nickname" in self.version and not isinstance(self.version["nickname"], str):
+            raise PixLiteError("Invalid controller nickname")
         if not isinstance(versions, list) or any(
             not isinstance(version, dict)
             or not isinstance(version.get("maj"), str)
@@ -194,13 +198,18 @@ class PixLiteClient:
             for v in versions
         ):
             raise UnsupportedDevice("Controller must support API v1.9")
-        self.constants = await self.read("constant", ["dev", "ver"])
-        dev = self.constants.get("dev", {})
+        constants = await self.read("constant", ["dev", "ver"])
+        dev = constants.get("dev", {})
         if not isinstance(dev, dict) or dev.get("prodFamilyName") != "PixLite Mk3":
             raise UnsupportedDevice("Expected a PixLite Mk3 with a MAC address")
-        _controller_identity(self.constants)
-        if self.expected_mac and self.unique_id != self.expected_mac:
+        identity = _controller_identity(constants)
+        if not isinstance(dev.get("prodName"), str) or not dev["prodName"].strip():
+            raise PixLiteError("Invalid controller product name")
+        if "ver" in constants and not isinstance(constants["ver"], dict):
+            raise PixLiteError("Invalid controller firmware object")
+        if self.expected_mac and identity != self.expected_mac:
             raise InvalidCertificate(62)
+        self.constants = constants
         return self.constants
 
     @property

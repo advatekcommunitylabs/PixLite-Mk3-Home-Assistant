@@ -38,7 +38,7 @@ async def tls_controller(request):
         assert request.query["auth"] == api.password_hash("fixture-secret")
         return web.json_response(
             {"resp": "constantRead", "result": {"constant": {"dev": {
-                "prodFamilyName": "PixLite Mk3", "macAddr": "acde48000080"
+                "prodFamilyName": "PixLite Mk3", "prodName": "PixLite Mk3", "macAddr": "acde48000080"
             }}}}
         )
 

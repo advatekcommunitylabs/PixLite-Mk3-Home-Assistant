@@ -215,7 +215,7 @@ async def peer(tmp_path, certificates, key, *, drop=False, redirect=False):
                 if len(body) < length:
                     body += await reader.readexactly(length - len(body))
                 req = json.loads(body)["req"]
-                result = {"resp": req, "result": {"constant": {"dev": {"prodFamilyName": "PixLite Mk3", "macAddr": list(certificates[2].subject)[0].value}}}}
+                result = {"resp": req, "result": {"constant": {"dev": {"prodFamilyName": "PixLite Mk3", "prodName": "PixLite Mk3", "macAddr": list(certificates[2].subject)[0].value}}}}
             payload = json.dumps(result).encode()
             status = b"302 Found\r\nLocation: http://127.0.0.1:1/" if redirect else b"200 OK"
             writer.write(b"HTTP/1.1 " + status + b"\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: " + str(len(payload)).encode() + b"\r\n\r\n" + payload)
