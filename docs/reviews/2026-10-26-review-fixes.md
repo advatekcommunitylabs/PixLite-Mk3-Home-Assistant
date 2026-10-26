@@ -23,7 +23,11 @@ Manifest ownership and integration-specific documentation: accepted in `3401513`
 
 ## Verification boundary
 
-Local Windows/Python 3.12: **103 protocol/control/regression tests passed**; integration and real-HA test sources compile, and whitespace checks pass. These tests do not establish HA runtime behavior. Final authorized Linux results will be appended after the manual run completes.
+Implementation commits: [`3401513`](https://github.com/advatekcommunitylabs/PixLite-Mk3-Home-Assistant/commit/3401513b21067160b66cab46e757174e27d54c24), [`6ce8de3`](https://github.com/advatekcommunitylabs/PixLite-Mk3-Home-Assistant/commit/6ce8de3606111f5d3ed19ae2b2b4f3afa3891035), and follow-up [`13d9160`](https://github.com/advatekcommunitylabs/PixLite-Mk3-Home-Assistant/commit/13d91602794508501ada695758d864b6aa68ba45).
+
+Local Windows/Python 3.12: **103 protocol/control/regression tests passed**; integration and real-HA test sources compile, and whitespace checks pass. These tests do not establish HA runtime behavior.
+
+[Manual run at `13d9160`](https://github.com/advatekcommunitylabs/PixLite-Mk3-Home-Assistant/actions/runs/40337779322): all **32 real-HA tests passed**, config-flow branch coverage 100%, combined integration statement/branch coverage 78%, and hassfest passed. The separate protocol step failed because auto-loading the installed HA pytest plugin blocked the loopback HTTP simulator. The workflow now explicitly loads only pytest-asyncio for that step; HA resource checks remain enabled in the real-HA step. Final workflow results will be appended after verification of this harness correction.
 
 Run focused tests without a Home Assistant installation:
 

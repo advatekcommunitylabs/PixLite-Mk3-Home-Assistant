@@ -17,7 +17,11 @@ jobs:
       - name: Real Home Assistant interfaces
         run: python -m pytest tests/ha -q --asyncio-mode=auto --cov=custom_components.advatek_pixlite --cov-branch --cov-report=term-missing --cov-report=xml:coverage-ha.xml --junitxml=results-ha.xml
       - name: Protocol and focused regression tests
-        run: python -m pytest tests/test_api.py tests/test_controls.py docs/reviews/reproduce_2026_10_22.py -q --asyncio-mode=auto --junitxml=results-unit.xml
+        env:
+          # HA's autouse plugin blocks the deliberate loopback HTTP simulator.
+          # Keep these interface-double tests independent of all HA fixtures.
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+        run: python -m pytest -p pytest_asyncio.plugin tests/test_api.py tests/test_controls.py docs/reviews/reproduce_2026_10_22.py -q --asyncio-mode=auto --junitxml=results-unit.xml
       - uses: actions/upload-artifact@v4
         if: always()
         with:
