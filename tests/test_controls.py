@@ -359,3 +359,49 @@ async def test_playlist_rejects_unknown_files_and_queueing(modules, coordinator)
     with pytest.raises(Exception, match="not supported"):
         await player.async_play_media("playlist", "show.pl", enqueue="add")
     coordinator.command.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("code", [10, 14, None])
+async def test_file_attempt_interval_and_reinsertion(modules, monkeypatch, code):
+    now = [1000.0]
+    monkeypatch.setattr(modules.coordinator.time, "monotonic", lambda: now[0])
+    client = SimpleNamespace(constants={"dev": {}}, read=AsyncMock(return_value={}),
+                             files=AsyncMock(), verify_identity=AsyncMock())
+    if code:
+        client.files.side_effect = modules.coordinator.PixLiteError("Unavailable media", code)
+    else:
+        client.files.return_value = ["existing.pl"]
+    c = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test", unique_id="acde48000080"), client)
+    c.files = ["existing.pl"]
+    await c._async_update_data()
+    assert c.files == ([] if code == 14 else ["existing.pl"])
+    now[0] = 1010
+    await c._async_update_data()
+    assert client.files.await_count == 1
+    client.files.side_effect = None
+    client.files.return_value = ["inserted.pl"]
+    now[0] = 1060
+    await c._async_update_data()
+    assert client.files.await_count == 2
+    assert c.files == ["inserted.pl"]
+    c.files_updated = 0
+    now[0] = 1061
+    await c._async_update_data()
+    assert client.files.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_unexpected_file_errors_fail_update_and_require_identity_check(modules):
+    client = SimpleNamespace(constants={"dev": {}}, read=AsyncMock(return_value={}),
+                             files=AsyncMock(side_effect=modules.coordinator.PixLiteError("Failure", 999)),
+                             verify_identity=AsyncMock())
+    c = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test", unique_id="acde48000080"), client)
+    with pytest.raises(modules.coordinator.UpdateFailed):
+        await c._async_update_data()
+    assert not c.identity_verified
+    assert c.files_updated == 0
+    client.files.side_effect = None
+    client.files.return_value = []
+    await c._async_update_data()
+    client.verify_identity.assert_awaited_once_with("acde48000080")

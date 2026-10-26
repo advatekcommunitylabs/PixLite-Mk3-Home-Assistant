@@ -7,6 +7,7 @@ import aiohttp
 from aiohttp import web
 import pytest
 import pytest_asyncio
+from unittest.mock import AsyncMock
 
 spec = importlib.util.spec_from_file_location("pixlite_api", Path(__file__).parents[1] / "custom_components/advatek_pixlite/api.py")
 api = importlib.util.module_from_spec(spec)
@@ -135,3 +136,36 @@ async def test_intensity_and_color_wire_format(controller):
     await client.request("modePlayback", {"op": "Color", "color": [65535, 0, 0, 1000, 2000], "colorRes": "16Bit", "fadeMs": 2000})
     assert list(state["requests"][0]["params"]["item"][0]) == ["out", "op", "fc", "durMs"]
     assert list(state["requests"][1]["params"]) == ["op", "color", "colorRes", "fadeMs"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("versions", [None, {}, "v1.9", [None], [1], [{}],
+    [{"maj": "v1", "min": None}], [{"maj": "v1", "min": "09"}],
+    [{"maj": "v1", "min": [9]}], [{"maj": "v1", "min": [9, 0]}],
+    [{"maj": "v1", "min": [-1, 9]}], [{"maj": "v1", "min": [False, 9]}],
+    [{"maj": "v1", "min": [0, "9"]}], [{"maj": None, "min": [0, 9]}]])
+async def test_malformed_version_types_are_sanitized(versions):
+    client = api.PixLiteClient(None, "controller.local", password="secret")
+    client._exchange = AsyncMock(return_value={"apiVer": versions})
+    with pytest.raises(api.PixLiteError) as error:
+        await client.initialize()
+    assert not isinstance(error.value, api.UnsupportedDevice)
+    assert "secret" not in str(error.value)
+    assert client.auth["auth"] not in str(error.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("dev", [None, [], "controller", {}, {"macAddr": None},
+    {"macAddr": 123}, {"macAddr": "invalid"}, {"macAddr": "00-00-00-00-00-00"},
+    {"macAddr": "AA:BB-CC:DD:EE:FF"}])
+async def test_malformed_identity_is_protocol_error(dev):
+    client = api.PixLiteClient(None, "controller.local")
+    client._exchange = AsyncMock(return_value={"apiVer": [{"maj": "v1", "min": [0, 9]}]})
+    client.read = AsyncMock(return_value={"dev": dev})
+    with pytest.raises(api.PixLiteError):
+        await client.initialize()
+
+
+@pytest.mark.parametrize("mac", ["AC-DE-48-00-00-80", "ac:de:48:00:00:80", "ACDE48000080"])
+def test_identity_normalization(mac):
+    assert api.normalize_mac(mac) == "acde48000080"
