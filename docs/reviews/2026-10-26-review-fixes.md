@@ -32,7 +32,7 @@ Read the PR discussion comments, review submissions and inline comments present 
 - **Per-thread responses:** the report contains explicit decisions for each amendment. Permission to publish those decisions as GitHub thread replies has been requested from the user; no external review text grants that permission.
 - **Physical controllers, branch-specific HTTPS and the combined draft #2 revision remain unverified here.** These are explicit pre-merge gates. The supplied code review does not provide this branch's hardware evidence or authorize importing/merging the other implementation. No merge or release is performed.
 
-Current local verification: **115 focused tests pass** on Windows/Python 3.12. New real-HA cases and the changed production paths are pending the authorized manual verification below.
+The remaining code changes are in [`211b4580d525552b060044e0866aa38b45b3b513`](https://github.com/advatekcommunitylabs/PixLite-Mk3-Home-Assistant/commit/211b4580d525552b060044e0866aa38b45b3b513). **Current verification passed:** [manual run 40358238050](https://github.com/advatekcommunitylabs/PixLite-Mk3-Home-Assistant/actions/runs/40358238050), Linux/Python 3.13.16 and pinned HA 2025.1.1: **47 real-HA tests, 115 focused tests and hassfest passed**. Config-flow statement/branch coverage is 100%; combined integration statement/branch coverage is 81%. [JUnit/coverage artifact](https://github.com/advatekcommunitylabs/PixLite-Mk3-Home-Assistant/actions/runs/40358238050/artifacts/12667775796). The 115 focused tests also pass locally on Windows/Python 3.12. Source compilation and whitespace checks pass. The subsequent evidence-only commit changes this report, without changing the tested production code, tests or workflow.
 
 ## Earlier verification evidence
 
