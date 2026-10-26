@@ -129,19 +129,23 @@ async def test_all_platforms_units_and_services(hass, entry, controllers):
     assert [c["req"] for c in controllers["controller.local"]["commands"]] == ["playbackCtrl", "progInt", "progInt", "modePlayback", "modePlayback"]
 
 
-async def test_recovery_identity_and_independent_controller(hass, entry, controllers):
+@pytest.mark.parametrize("outage", [True, False])
+async def test_recovery_identity_and_independent_controller(hass, entry, controllers, outage):
+    await setup(hass, entry)
     controllers["other.local"] = device("AC-DE-48-00-00-82")
     other = MockConfigEntry(domain=DOMAIN, title="Other", unique_id="acde48000082", data=DATA | {"host": "other.local"})
     other.add_to_hass(hass)
-    await setup(hass, entry)
     await setup(hass, other)
     coordinator = entry.runtime_data
-    controllers["controller.local"]["offline"] = True
-    await coordinator.async_refresh()
-    assert hass.states.get(entity_id(hass, entry, "light", "pixels")).state == "unavailable"
+    if outage:
+        controllers["controller.local"]["offline"] = True
+        await coordinator.async_refresh()
+        assert hass.states.get(entity_id(hass, entry, "light", "pixels")).state == "unavailable"
     controllers["controller.local"] = device("AC-DE-48-00-00-81")
     await coordinator.async_refresh()
     assert not coordinator.last_update_success
+    assert hass.states.get(entity_id(hass, entry, "light", "pixels")).state == "unavailable"
+    assert controllers["controller.local"]["requests"] == ["constantRead"]
     with pytest.raises(HomeAssistantError):
         await coordinator.command("modePlayback", {"op": "Blank"})
     assert controllers["controller.local"]["commands"] == []
@@ -152,6 +156,61 @@ async def test_recovery_identity_and_independent_controller(hass, entry, control
     assert coordinator.last_update_success
     await hass.services.async_call("button", "press", {"entity_id": entity_id(hass, entry, "button", "blank")}, blocking=True)
     assert len(controllers["controller.local"]["commands"]) == 1
+
+
+async def test_replacement_between_compound_commands_does_not_retry(hass, entry, controllers):
+    await setup(hass, entry)
+    original = controllers["controller.local"]
+    replacement = device("AC-DE-48-00-00-81")
+    original["replace_after_command"] = replacement
+    coordinator = entry.runtime_data
+    with pytest.raises(HomeAssistantError, match="identity mismatch"):
+        await coordinator.commands([("modePlayback", {"op": "Color", "color": [65535, 0, 0]}),
+                                    ("progInt", {"item": [{"out": "Pix", "op": "HiSet", "fc": 100}]})])
+    await hass.async_block_till_done()
+    assert [c["req"] for c in original["commands"]] == ["modePlayback"]
+    assert replacement["commands"] == []
+    assert set(replacement["requests"]) == {"constantRead"}
+    controllers["other.local"] = device("AC-DE-48-00-00-82")
+    other = MockConfigEntry(domain=DOMAIN, title="Other", unique_id="acde48000082", data=DATA | {"host": "other.local"})
+    other.add_to_hass(hass)
+    await setup(hass, other)
+    await other.runtime_data.command("modePlayback", {"op": "Blank"})
+    assert len(controllers["other.local"]["commands"]) == 1
+    controllers["controller.local"] = original
+    await coordinator.async_refresh()
+    assert coordinator.last_update_success
+    # Recovery never replays the omitted intensity write or the delivered colour.
+    assert [c["req"] for c in original["commands"]] == ["modePlayback"]
+
+
+@pytest.mark.parametrize("kind", ["missing_product", "invalid_product", "blank_product", "invalid_nickname"])
+@pytest.mark.parametrize("path", ["flow", "setup"])
+async def test_malformed_metadata_has_sanitized_ha_failure(hass, entry, controllers, kind, path, caplog):
+    current = controllers["controller.local"]
+    if kind == "missing_product":
+        current["version"].pop("nickname")
+        current["constant"]["dev"].pop("prodName")
+    elif kind == "invalid_product":
+        current["constant"]["dev"]["prodName"] = {"unexpected": "value"}
+    elif kind == "blank_product":
+        current["constant"]["dev"]["prodName"] = " "
+    else:
+        current["version"]["nickname"] = ["invalid"]
+    data = DATA | {"password": "test-secret-password"}
+    if path == "flow":
+        flow = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+        result = await hass.config_entries.flow.async_configure(flow["flow_id"], data)
+        assert result["errors"] == {"base": "cannot_connect"}
+    else:
+        hass.config_entries.async_update_entry(entry, data=data)
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        assert entry.state is ConfigEntryState.SETUP_RETRY
+    assert current["commands"] == []
+    assert "test-secret-password" not in caplog.text
+    assert "KeyError" not in caplog.text
+    assert "TypeError" not in caplog.text
 
 
 async def test_dynamic_aux_and_unload_reload(hass, entry, controllers):

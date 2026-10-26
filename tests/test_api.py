@@ -23,6 +23,8 @@ async def controller():
         state["peak"] = max(state["peak"], state["active"])
         try:
             await asyncio.sleep(0.005)
+            if state.get("invalid_json"):
+                return web.Response(text="{invalid", content_type="application/json")
             if request.method == "GET":
                 assert request.path == "/ver"
                 assert not request.query
@@ -39,7 +41,7 @@ async def controller():
             if state["error"]:
                 response["err"] = {"code": state["error"], "msg": "test"}
             elif body["req"] == "constantRead":
-                response["result"] = {"constant": {"dev": {"prodFamilyName": "PixLite Mk3", "macAddr": "AC-DE-48-00-00-80"}}}
+                response["result"] = {"constant": {"dev": {"prodFamilyName": "PixLite Mk3", "prodName": "PixLite Mk3", "macAddr": "AC-DE-48-00-00-80"}}}
             elif body["req"] == "fileList":
                 response["result"] = {"files": [{"file": "Rainbow.scn"}, {"file": "Loop.pl"}, {"file": "notes.txt"}]}
             elif body["req"] == "statusRead":
@@ -169,3 +171,29 @@ async def test_malformed_identity_is_protocol_error(dev):
 @pytest.mark.parametrize("mac", ["AC-DE-48-00-00-80", "ac:de:48:00:00:80", "ACDE48000080"])
 def test_identity_normalization(mac):
     assert api.normalize_mac(mac) == "acde48000080"
+
+
+@pytest.mark.asyncio
+async def test_invalid_json_is_sanitized(controller):
+    client, state = controller
+    state["invalid_json"] = True
+    with pytest.raises(api.PixLiteError) as error:
+        await client.read("status")
+    assert str(error.value) == "Unable to communicate with controller"
+    assert client.auth["auth"] not in str(error.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field", ["prodName", "nickname"])
+@pytest.mark.parametrize("value", [None, 12, {}, [], True])
+async def test_malformed_product_metadata_is_protocol_error(field, value):
+    client = api.PixLiteClient(None, "controller.local", password="secret")
+    version = {"apiVer": [{"maj": "v1", "min": [0, 9]}]}
+    dev = {"prodFamilyName": "PixLite Mk3", "prodName": "PixLite Mk3", "macAddr": "AC-DE-48-00-00-80"}
+    (version if field == "nickname" else dev)[field] = value
+    client._exchange = AsyncMock(return_value=version)
+    client.read = AsyncMock(return_value={"dev": dev})
+    with pytest.raises(api.PixLiteError) as error:
+        await client.initialize()
+    assert "secret" not in str(error.value)
+    assert client.auth["auth"] not in str(error.value)

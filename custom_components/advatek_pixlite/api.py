@@ -109,6 +109,8 @@ class PixLiteClient:
         versions = self.version.get("apiVer")
         if not isinstance(versions, list):
             raise PixLiteError("Invalid API version list")
+        if "nickname" in self.version and not isinstance(self.version["nickname"], str):
+            raise PixLiteError("Invalid controller nickname")
         for version in versions:
             if not isinstance(version, dict) or not isinstance(version.get("maj"), str):
                 raise PixLiteError("Invalid API version entry")
@@ -126,6 +128,8 @@ class PixLiteClient:
         normalize_mac(dev.get("macAddr"))
         if dev.get("prodFamilyName") != "PixLite Mk3":
             raise UnsupportedDevice("Expected a PixLite Mk3 with a MAC address")
+        if not isinstance(dev.get("prodName"), str) or not dev["prodName"].strip():
+            raise PixLiteError("Invalid controller product name")
         if "ver" in constants and not isinstance(constants["ver"], dict):
             raise PixLiteError("Invalid controller firmware object")
         self.constants = constants

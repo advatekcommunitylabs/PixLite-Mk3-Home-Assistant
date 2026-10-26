@@ -26,7 +26,7 @@ def device(mac="AC-DE-48-00-00-80"):
         "config": {"pix": {"colorType": "RGB"}, "operIf": {"pal": [[255, 0, 0]], "colorRes": "8Bit"},
                    "auxPort": {"mode": ["DMX512Out"]}},
         "files": [{"file": "show.pl"}, {"file": "scene.scn"}],
-        "commands": [], "offline": False, "auth_failed": False,
+        "commands": [], "requests": [], "offline": False, "auth_failed": False,
     }
 
 
@@ -49,6 +49,7 @@ def controllers(monkeypatch):
         if method == "GET":
             return deepcopy(current["version"])
         name = body["req"]
+        current["requests"].append(name)
         if name.endswith("Read"):
             key = name[:-4]
             if current.get("fail_read") == key:
@@ -57,6 +58,8 @@ def controllers(monkeypatch):
         if name == "fileList":
             return {"files": deepcopy(current["files"])}
         current["commands"].append(deepcopy(body))
+        if current.get("replace_after_command"):
+            devices[urlparse(client.base_url).hostname] = current.pop("replace_after_command")
         return {}
 
     monkeypatch.setattr(PixLiteClient, "_exchange", exchange)

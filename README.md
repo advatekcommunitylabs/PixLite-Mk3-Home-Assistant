@@ -7,10 +7,10 @@ Local custom integration, version 0.4.1. Add one entry per controller; controlle
 1. Copy `custom_components/advatek_pixlite` into your Home Assistant configuration directory, resulting in `/config/custom_components/advatek_pixlite/manifest.json`.
 2. Restart Home Assistant.
 3. Open **Settings > Devices & services > Add integration > Advatek PixLite Mk3**.
-4. Enter the controller IP address/hostname, user (Administrator or enabled Operator) and password. An empty password is supported. HTTP defaults to 80; HTTPS defaults to 4443. Leave the optional port blank for these defaults.
+4. Enter the controller IP address/hostname, user (Administrator or enabled Operator) and password. An empty password is supported. HTTP defaults to 80; HTTPS defaults to 4443. Set the port to 0 (the default) to use these protocol defaults. When reconfiguring an entry, changing a custom port back to 0 clears the override.
 5. Repeat for each additional controller. Assign each device a useful name and area.
 
-Requires a controller advertising API **v1.9** and a modern Home Assistant installation supporting config entry `runtime_data`. Intended baseline: Home Assistant 2025.1 or later; full HA runtime compatibility has not yet been verified. Use **Reconfigure** on the integration entry after an IP address or password change. A replacement controller with a different MAC should be added separately.
+Requires a controller advertising API **v1.9** and a modern Home Assistant installation supporting config entry `runtime_data`. The real-HA test environment is pinned to Home Assistant 2025.1.1 on Python 3.13. CI results, review dispositions and remaining hardware-validation limits are recorded in `docs/reviews/2026-10-26-review-fixes.md`; this is not a blanket compatibility claim for other versions. Use **Reconfigure** on the integration entry after an IP address or password change. A replacement controller with a different MAC should be added separately.
 
 ## Controls and monitoring
 
@@ -23,7 +23,7 @@ Requires a controller advertising API **v1.9** and a modern Home Assistant insta
 - **Aux N intensity** faders (0–100%) appear for auxiliary ports configured as DMX Output. Adjusting a fader takes priority over live intensity for that auxiliary output without changing pixel brightness or playback mode. Values reflect the currently controlling intensity. The integration detects newly enabled DMX outputs while polling; previously added faders become unavailable when their port is changed to input or disabled.
 - The device Sensors section shows temperature, CPU usage, input/output frame rate, input bank voltages, and supported per-output currents, voltages and power status. Operating mode and playback status remain diagnostic sensors.
 - Binary sensors: playback error and playback paused.
-- Status and measurements refresh every 10 seconds; the file list refreshes every 60 seconds. Commands request an immediate refresh. Disconnected controllers become unavailable and polling retries automatically.
+- Status and measurements refresh every 10 seconds; the file list refreshes every 60 seconds. Commands request an immediate refresh. Disconnected controllers become unavailable and polling retries automatically. Every poll and each output request, including each part of a compound light action, checks the MAC first. A mismatch blocks output commands and requires correcting the address or adding the replacement controller separately. These checks detect address reuse; they are not cryptographic device authentication and cannot prevent a device changing between separate HTTP requests. Partially delivered actions are refreshed and never replayed automatically.
 
 Blank blanks the controller outputs; it does not remove electrical power. Live Data restores configured streaming input. Pause/Resume require an applicable file playback, and Previous/Next require a playlist; invalid commands return a controller error. Restart current mode can also restart recording if recording is active. The API's `Stop` only exits transient modes and is deliberately not presented as a universal stop button.
 
@@ -121,15 +121,24 @@ This implementation uses HTTP polling; Advatek recommends WebSockets for push up
 
 ## Validation
 
-`tests/test_api.py` runs the actual aiohttp client against a local HTTP simulator. It checks authentication encoding, version gating, endpoint/message formatting, serialization, file enumeration, result-less responses, and HTTP/API failures. `tests/test_controls.py` tests light/palette/priority behaviour and compound-command handling using lightweight HA interface doubles. These tests do not boot Home Assistant or substitute for hardware testing.
+`tests/test_api.py` runs the actual aiohttp client against a local HTTP simulator. It checks authentication encoding, version gating, endpoint/message formatting, serialization, file enumeration, result-less responses, and HTTP/API failures. `tests/test_controls.py` tests light/palette/priority behaviour and compound-command handling using lightweight HA interface doubles. These focused tests do not boot Home Assistant or substitute for hardware testing. `tests/ha` separately uses the real HA `hass` fixture and `MockConfigEntry`, mocking only controller transport. Run this suite in Linux with the exact dependencies below. CI also runs hassfest manifest validation and retains JUnit/coverage evidence.
 
 ```sh
 python -m pip install aiohttp pytest pytest-asyncio
-python -m pytest tests -q
+python -m pytest tests/test_api.py tests/test_controls.py -q
 python -m compileall -q custom_components
 ```
 
-Before relying on automations, test one controller: add it, compare readings with its UI, start a known scene, dim it, turn the light off/on, pick a solid colour and palette preset, check live intensity priority, pause/resume, blackout, restore live mode, unplug/reconnect the network, and test a second controller independently. Test missing SD media, credential changes and DHCP changes as well. These changes have not yet been tested on physical hardware or in a running HA instance.
+Run the real Home Assistant suite separately from tests that replace HA interfaces:
+
+```sh
+python -m pip install -r requirements-test-ha.txt
+python -m pytest tests/ha -q --asyncio-mode=auto
+```
+
+`tests/ha` is excluded from collection when HA is not installed. Such a local protocol-only run is not evidence of HA runtime compatibility. The manual-only Integration tests workflow runs each suite in a separate process. Pushes and pull requests do not automatically start it; dispatch it only when a verification run is authorized.
+
+Before relying on automations, test one controller: add it, compare readings with its UI, start a known scene, dim it, turn the light off/on, pick a solid colour and palette preset, check live intensity priority, pause/resume, blackout, restore live mode, unplug/reconnect the network, and test a second controller independently. Test missing SD media, credential changes and DHCP changes as well. Physical-controller validation remains outstanding. HA automated validation runs against a mocked controller transport, not a physical PixLite.
 
 ## References
 

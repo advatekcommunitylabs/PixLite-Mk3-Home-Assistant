@@ -27,9 +27,10 @@ class PixLiteCoordinator(DataUpdateCoordinator):
 
     async def _read_data(self):
         try:
-            if not self.identity_verified:
-                await self.client.verify_identity(self.expected_id)
-                self.identity_verified = True
+            # Verify every poll, including replacements without a transport outage.
+            self.identity_verified = False
+            await self.client.verify_identity(self.expected_id)
+            self.identity_verified = True
             status = await self.client.read("status")
             statistic_paths = ["dev", "pixData", "pixPwrOuts"]
             config_paths = ["pix.colorType", "operIf"]
@@ -65,10 +66,10 @@ class PixLiteCoordinator(DataUpdateCoordinator):
             async with self.control_lock:
                 # Check even before the next scheduled poll, so a command cannot
                 # bypass recovery. Keep identity verification and writes serialized.
-                self.identity_verified = False
-                await self.client.verify_identity(self.expected_id)
-                self.identity_verified = True
                 for name, params in commands:
+                    self.identity_verified = False
+                    await self.client.verify_identity(self.expected_id)
+                    self.identity_verified = True
                     await self.client.request(name, params)
         except PixLiteError as err:
             self.identity_verified = False

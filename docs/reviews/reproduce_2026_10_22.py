@@ -42,7 +42,7 @@ async def test_runtime_address_swap_blocks_outputs(modules):
         result = {}
         if name == "constantRead":
             result = {"constant": {"dev": {
-                "prodFamilyName": "PixLite Mk3", "macAddr": device["mac"]}}}
+                "prodFamilyName": "PixLite Mk3", "prodName": "PixLite Mk3", "macAddr": device["mac"]}}}
         elif name.endswith("Read"):
             result = {name[:-4]: {}}
         elif name == "fileList":
@@ -150,7 +150,7 @@ async def test_absent_sd_card_obeys_sixty_second_interval(modules, monkeypatch):
     now = [1000.0]
     monkeypatch.setattr(modules.coordinator.time, "monotonic", lambda: now[0])
     client = SimpleNamespace(
-        constants={"dev": {}}, read=AsyncMock(return_value={}),
+        constants={"dev": {}}, read=AsyncMock(return_value={}), verify_identity=AsyncMock(),
         files=AsyncMock(side_effect=modules.coordinator.PixLiteError("No card", 14)),
     )
     coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test", unique_id="aabbcc000001"), client)

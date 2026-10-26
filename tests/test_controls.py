@@ -211,7 +211,7 @@ async def test_partial_command_failure_refreshes_without_retry(modules):
 @pytest.mark.asyncio
 async def test_poll_refreshes_external_palette_and_colour_type_without_sd(modules):
     config = {"pix": {"colorType": "RGBW"}, "operIf": {"pal": [[1, 2, 3, 4]], "colorRes": "16Bit"}}
-    client = SimpleNamespace(constants={"dev": {}}, read=AsyncMock(side_effect=[{"mode": "live"}, {}, config]),
+    client = SimpleNamespace(constants={"dev": {}}, verify_identity=AsyncMock(), read=AsyncMock(side_effect=[{"mode": "live"}, {}, config]),
                              files=AsyncMock(side_effect=modules.coordinator.PixLiteError("No card", 14)))
     coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test", unique_id="aabbcc000001"), client)
     result = await coordinator._async_update_data()
@@ -284,7 +284,7 @@ async def test_discrete_transport_buttons(modules, coordinator):
 
 @pytest.mark.asyncio
 async def test_poll_requests_aux_fields_on_capable_devices(modules):
-    client = SimpleNamespace(constants={"dev": {"auxPorts": 1}},
+    client = SimpleNamespace(constants={"dev": {"auxPorts": 1}}, verify_identity=AsyncMock(),
                              read=AsyncMock(side_effect=[{}, {}, {}]), files=AsyncMock(return_value=[]))
     coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test", unique_id="aabbcc000001"), client)
     await coordinator._async_update_data()
@@ -404,4 +404,5 @@ async def test_unexpected_file_errors_fail_update_and_require_identity_check(mod
     client.files.side_effect = None
     client.files.return_value = []
     await c._async_update_data()
-    client.verify_identity.assert_awaited_once_with("acde48000080")
+    assert client.verify_identity.await_count == 2
+    client.verify_identity.assert_awaited_with("acde48000080")
