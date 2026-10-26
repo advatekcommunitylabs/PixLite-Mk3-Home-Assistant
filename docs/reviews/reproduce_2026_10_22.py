@@ -1,7 +1,7 @@
-"""Diagnostic observations of the reviewed baseline, not fix acceptance tests.
+"""Regression coverage for the five diagnostic probes in the review.
 
 Run explicitly with pytest. These probes use the existing HA doubles and a
-loopback HTTP server. Passing means the documented baseline gap reproduced.
+loopback HTTP server. Passing means the reviewed software regressions are prevented.
 They do not validate a running Home Assistant instance or physical hardware.
 """
 import importlib
@@ -25,7 +25,7 @@ modules = control_tests.modules
 
 
 @pytest.mark.asyncio
-async def test_runtime_address_swap_is_not_detected(modules):
+async def test_runtime_address_swap_blocks_outputs(modules):
     api = importlib.import_module("pixlite_test.api")
     first_mac, second_mac = "AA-BB-CC-00-00-01", "AA-BB-CC-00-00-02"
     device = {"mac": first_mac, "requests": [], "outputs": [], "offline": False}
@@ -73,18 +73,24 @@ async def test_runtime_address_swap_is_not_detected(modules):
             # Simulate another controller accepting the same credentials at this address.
             device["offline"] = False
             device["mac"] = second_mac
+            with pytest.raises(modules.coordinator.UpdateFailed, match="identity mismatch"):
+                await coordinator._async_update_data()
+            with pytest.raises(Exception, match="identity mismatch"):
+                await coordinator.command("modePlayback", {"op": "Blank"})
+            assert device["outputs"] == []
+            assert client.unique_id == expected_id
+            assert any(mac == second_mac and name == "constantRead"
+                       for mac, name in device["requests"])
+            device["mac"] = first_mac
             await coordinator._async_update_data()
             await coordinator.command("modePlayback", {"op": "Blank"})
-            assert device["outputs"] == [(second_mac, "modePlayback")]
-            assert client.unique_id == expected_id
-            assert not any(mac == second_mac and name == "constantRead"
-                           for mac, name in device["requests"])
+            assert device["outputs"] == [(first_mac, "modePlayback")]
     finally:
         await runner.cleanup()
 
 
 @pytest.mark.asyncio
-async def test_reconfigure_omitted_port_retains_previous_override(modules, monkeypatch):
+async def test_reconfigure_omitted_port_clears_previous_override(modules, monkeypatch):
     # The helper's merge semantics were checked against HA Core 2025.1.0 and
     # 2026.10.2: data_updates merges into entry.data; data replaces entry.data.
     # This probe emulates that helper. It does not run HA's config-flow manager.
@@ -108,7 +114,7 @@ async def test_reconfigure_omitted_port_retains_previous_override(modules, monke
         unique_id = "aabbcc000001"
 
         def __init__(self, session, **data):
-            validated_ports.append(data.get("port", 4443 if data["use_ssl"] else 80))
+            validated_ports.append(data.get("port") or (4443 if data["use_ssl"] else 80))
 
         async def initialize(self):
             pass
@@ -122,34 +128,41 @@ async def test_reconfigure_omitted_port_retains_previous_override(modules, monke
     flow.hass = None
     flow._get_reconfigure_entry = lambda: entry
     flow.async_set_unique_id = AsyncMock()
-    flow.async_update_reload_and_abort = lambda entry, data_updates: entry.data | data_updates
+    flow.async_update_reload_and_abort = lambda entry, data: data
     submitted = {key: value for key, value in entry.data.items() if key != "port"}
     saved = await flow.async_step_reconfigure(submitted)
     assert validated_ports == [80]
-    assert saved["port"] == 8080
+    assert saved["port"] is None
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("versions", [[None], [{"maj": "v1", "min": None}]])
-async def test_malformed_version_escapes_protocol_error_boundary(modules, versions):
+async def test_malformed_version_stays_inside_protocol_error_boundary(modules, versions):
     api = importlib.import_module("pixlite_test.api")
     client = api.PixLiteClient(None, "controller.local")
     client._exchange = AsyncMock(return_value={"apiVer": versions})
-    with pytest.raises((AttributeError, TypeError)):
+    with pytest.raises(api.PixLiteError):
         await client.initialize()
 
 
 @pytest.mark.asyncio
-async def test_absent_sd_card_repeats_file_listing_before_sixty_seconds(modules, monkeypatch):
+async def test_absent_sd_card_obeys_sixty_second_interval(modules, monkeypatch):
     now = [1000.0]
     monkeypatch.setattr(modules.coordinator.time, "monotonic", lambda: now[0])
     client = SimpleNamespace(
         constants={"dev": {}}, read=AsyncMock(return_value={}),
         files=AsyncMock(side_effect=modules.coordinator.PixLiteError("No card", 14)),
     )
-    coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test"), client)
+    coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test", unique_id="aabbcc000001"), client)
     await coordinator._async_update_data()
     now[0] += 10
     await coordinator._async_update_data()
+    assert client.files.await_count == 1
+    assert coordinator.files_updated == 1000
+    now[0] = 1060
+    await coordinator._async_update_data()
     assert client.files.await_count == 2
-    assert coordinator.files_updated == 0
+    coordinator.files_updated = 0  # Explicit Refresh Showtime files override.
+    now[0] = 1061
+    await coordinator._async_update_data()
+    assert client.files.await_count == 3

@@ -18,6 +18,8 @@ class PixLiteCoordinator(DataUpdateCoordinator):
         self.files = []
         self.files_updated = 0
         self.control_lock = asyncio.Lock()
+        self.expected_id = entry.unique_id
+        self.identity_verified = True  # Setup has already compared the MAC.
 
     async def _async_update_data(self):
         async with self.control_lock:
@@ -25,6 +27,9 @@ class PixLiteCoordinator(DataUpdateCoordinator):
 
     async def _read_data(self):
         try:
+            if not self.identity_verified:
+                await self.client.verify_identity(self.expected_id)
+                self.identity_verified = True
             status = await self.client.read("status")
             statistic_paths = ["dev", "pixData", "pixPwrOuts"]
             config_paths = ["pix.colorType", "operIf"]
@@ -42,10 +47,13 @@ class PixLiteCoordinator(DataUpdateCoordinator):
                         self.files = []
                     elif err.code != 10:  # Recording/formatting can prohibit listing.
                         raise
+                    self.files_updated = time.monotonic()
             return {"status": status, "statistic": stats, "files": list(self.files), "config": config}
         except InvalidAuth as err:
+            self.identity_verified = False
             raise ConfigEntryAuthFailed(str(err)) from err
         except PixLiteError as err:
+            self.identity_verified = False
             raise UpdateFailed(str(err)) from err
 
     async def command(self, name, params=None):
@@ -55,9 +63,15 @@ class PixLiteCoordinator(DataUpdateCoordinator):
         """Keep multi-request light actions together; do not retry output changes."""
         try:
             async with self.control_lock:
+                # Check even before the next scheduled poll, so a command cannot
+                # bypass recovery. Keep identity verification and writes serialized.
+                self.identity_verified = False
+                await self.client.verify_identity(self.expected_id)
+                self.identity_verified = True
                 for name, params in commands:
                     await self.client.request(name, params)
         except PixLiteError as err:
+            self.identity_verified = False
             # An earlier command may have succeeded; reconcile partial success.
             await self.async_request_refresh()
             raise HomeAssistantError(str(err)) from err

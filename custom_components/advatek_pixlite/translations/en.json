@@ -10,7 +10,7 @@
           "username": "User type",
           "password": "Password",
           "use_ssl": "Use HTTPS",
-          "port": "Port (optional)"
+          "port": "Port (0 uses HTTP/HTTPS default)"
         }
       },
       "reconfigure": {
@@ -21,7 +21,7 @@
           "username": "User type",
           "password": "Password",
           "use_ssl": "Use HTTPS",
-          "port": "Port (optional)"
+          "port": "Port (0 uses HTTP/HTTPS default)"
         }
       },
       "reauth_confirm": {
@@ -32,7 +32,7 @@
           "username": "User type",
           "password": "Password",
           "use_ssl": "Use HTTPS",
-          "port": "Port (optional)"
+          "port": "Port (0 uses HTTP/HTTPS default)"
         }
       }
     },

@@ -1,9 +1,9 @@
 {
   "domain": "advatek_pixlite",
   "name": "Advatek PixLite Mk3",
-  "codeowners": [],
+  "codeowners": ["@SamAdvatek"],
   "config_flow": true,
-  "documentation": "https://www.advateklighting.com/",
+  "documentation": "https://github.com/advatekcommunitylabs/PixLite-Mk3-Home-Assistant",
   "integration_type": "device",
   "iot_class": "local_polling",
   "requirements": [],

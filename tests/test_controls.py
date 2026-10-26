@@ -190,8 +190,8 @@ async def test_multi_command_actions_do_not_interleave(modules):
     async def request(name, params):
         requests.append(name)
         await asyncio.sleep(0)
-    client = SimpleNamespace(request=request)
-    coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test"), client)
+    client = SimpleNamespace(request=request, verify_identity=AsyncMock())
+    coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test", unique_id="aabbcc000001"), client)
     coordinator.async_request_refresh = AsyncMock()
     await asyncio.gather(coordinator.commands([("color", {}), ("intensity", {})]), coordinator.command("pause"))
     assert requests == ["color", "intensity", "pause"]
@@ -199,8 +199,8 @@ async def test_multi_command_actions_do_not_interleave(modules):
 
 @pytest.mark.asyncio
 async def test_partial_command_failure_refreshes_without_retry(modules):
-    client = SimpleNamespace(request=AsyncMock(side_effect=[{}, modules.coordinator.PixLiteError("rejected")]))
-    coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test"), client)
+    client = SimpleNamespace(verify_identity=AsyncMock(), request=AsyncMock(side_effect=[{}, modules.coordinator.PixLiteError("rejected")]))
+    coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test", unique_id="aabbcc000001"), client)
     coordinator.async_request_refresh = AsyncMock()
     with pytest.raises(Exception, match="rejected"):
         await coordinator.commands([("color", {}), ("intensity", {})])
@@ -213,7 +213,7 @@ async def test_poll_refreshes_external_palette_and_colour_type_without_sd(module
     config = {"pix": {"colorType": "RGBW"}, "operIf": {"pal": [[1, 2, 3, 4]], "colorRes": "16Bit"}}
     client = SimpleNamespace(constants={"dev": {}}, read=AsyncMock(side_effect=[{"mode": "live"}, {}, config]),
                              files=AsyncMock(side_effect=modules.coordinator.PixLiteError("No card", 14)))
-    coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test"), client)
+    coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test", unique_id="aabbcc000001"), client)
     result = await coordinator._async_update_data()
     assert result["config"] == config
     assert result["files"] == []
@@ -286,7 +286,7 @@ async def test_discrete_transport_buttons(modules, coordinator):
 async def test_poll_requests_aux_fields_on_capable_devices(modules):
     client = SimpleNamespace(constants={"dev": {"auxPorts": 1}},
                              read=AsyncMock(side_effect=[{}, {}, {}]), files=AsyncMock(return_value=[]))
-    coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test"), client)
+    coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test", unique_id="aabbcc000001"), client)
     await coordinator._async_update_data()
     calls = client.read.call_args_list
     assert "auxData" in calls[1].args[1]
