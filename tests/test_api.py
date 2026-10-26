@@ -38,7 +38,9 @@ async def controller():
             if state["http"] != 200:
                 return web.Response(status=state["http"])
             response = {"resp": body["req"]}
-            if state["error"]:
+            if "error_envelope" in state:
+                response["err"] = state["error_envelope"]
+            elif state["error"]:
                 response["err"] = {"code": state["error"], "msg": "test"}
             elif body["req"] == "constantRead":
                 response["result"] = {"constant": {"dev": {"prodFamilyName": "PixLite Mk3", "prodName": "PixLite Mk3", "macAddr": "AC-DE-48-00-00-80"}}}
@@ -196,4 +198,36 @@ async def test_malformed_product_metadata_is_protocol_error(field, value):
     with pytest.raises(api.PixLiteError) as error:
         await client.initialize()
     assert "secret" not in str(error.value)
+    assert client.auth["auth"] not in str(error.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["null_error", "string_error", "list_error", "missing_code", "null_code",
+                                 "string_code", "list_code", "object_code", "true_code", "false_code", "float_code"])
+async def test_malformed_error_codes_never_reflect_authenticated_urls(controller, kind):
+    client, state = controller
+    leaked_url = f"{client.base_url}/v1.9/?user=oper&auth={client.auth['auth']}"
+    state["error_envelope"] = {
+        "null_error": None, "string_error": leaked_url, "list_error": [leaked_url],
+        "missing_code": {"msg": leaked_url}, "null_code": {"code": None},
+        "string_code": {"code": leaked_url}, "list_code": {"code": [leaked_url]},
+        "object_code": {"code": {"request_url": leaked_url}}, "true_code": {"code": True},
+        "false_code": {"code": False}, "float_code": {"code": 10.0},
+    }[kind]
+    with pytest.raises(api.PixLiteError) as error:
+        await client.read("status")
+    assert str(error.value) == "Invalid controller error response"
+    assert error.value.code is None
+    assert leaked_url not in str(error.value)
+    assert client.auth["auth"] not in str(error.value)
+
+
+@pytest.mark.asyncio
+async def test_future_integer_error_ignores_untrusted_message(controller):
+    client, state = controller
+    state["error_envelope"] = {"code": 999, "msg": f"http://controller/?auth={client.auth['auth']}"}
+    with pytest.raises(api.PixLiteError) as error:
+        await client.read("status")
+    assert error.value.code == 999
+    assert str(error.value) == "Controller rejected statusRead (code 999)"
     assert client.auth["auth"] not in str(error.value)

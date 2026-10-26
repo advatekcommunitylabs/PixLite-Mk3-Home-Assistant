@@ -84,7 +84,10 @@ class PixLiteClient:
             raise PixLiteError("Unexpected response type")
         if "err" in data:
             error = data["err"]
-            code = error.get("code") if isinstance(error, dict) else None
+            if not isinstance(error, dict) or type(error.get("code")) is not int:
+                # Never reflect arbitrary response JSON: it can contain credentials.
+                raise PixLiteError("Invalid controller error response")
+            code = error["code"]
             raise PixLiteError(f"Controller rejected {expected} (code {code})", code)
         result = data.get("result", {})
         if not isinstance(result, dict):

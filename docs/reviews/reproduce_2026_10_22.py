@@ -128,7 +128,7 @@ async def test_reconfigure_omitted_port_clears_previous_override(modules, monkey
     flow.hass = None
     flow._get_reconfigure_entry = lambda: entry
     flow.async_set_unique_id = AsyncMock()
-    flow.async_update_reload_and_abort = lambda entry, data: data
+    flow.async_update_reload_and_abort = lambda entry, data_updates: dict(entry.data) | data_updates
     submitted = {key: value for key, value in entry.data.items() if key != "port"}
     saved = await flow.async_step_reconfigure(submitted)
     assert validated_ports == [80]

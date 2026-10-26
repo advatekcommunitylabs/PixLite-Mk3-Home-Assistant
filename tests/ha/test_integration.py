@@ -1,6 +1,10 @@
 """Config flows, platform registration, services and lifecycle through HA Core."""
 from copy import deepcopy
+from contextlib import asynccontextmanager
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
+import aiohttp
 import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.data_entry_flow import FlowResultType
@@ -9,6 +13,7 @@ from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.advatek_pixlite.const import DOMAIN
+from custom_components.advatek_pixlite.api import password_hash
 from .conftest import device
 
 pytestmark = pytest.mark.asyncio
@@ -184,7 +189,7 @@ async def test_replacement_between_compound_commands_does_not_retry(hass, entry,
     assert [c["req"] for c in original["commands"]] == ["modePlayback"]
 
 
-@pytest.mark.parametrize("kind", ["missing_product", "invalid_product", "blank_product", "invalid_nickname"])
+@pytest.mark.parametrize("kind", ["missing_product", "invalid_product", "blank_product", "null_product", "invalid_nickname", "null_nickname"])
 @pytest.mark.parametrize("path", ["flow", "setup"])
 async def test_malformed_metadata_has_sanitized_ha_failure(hass, entry, controllers, kind, path, caplog):
     current = controllers["controller.local"]
@@ -195,6 +200,10 @@ async def test_malformed_metadata_has_sanitized_ha_failure(hass, entry, controll
         current["constant"]["dev"]["prodName"] = {"unexpected": "value"}
     elif kind == "blank_product":
         current["constant"]["dev"]["prodName"] = " "
+    elif kind == "null_product":
+        current["constant"]["dev"]["prodName"] = None
+    elif kind == "null_nickname":
+        current["version"]["nickname"] = None
     else:
         current["version"]["nickname"] = ["invalid"]
     data = DATA | {"password": "test-secret-password"}
@@ -232,3 +241,104 @@ async def test_dynamic_aux_and_unload_reload(hass, entry, controllers):
     assert coordinator._unsub_refresh is None
     await setup(hass, entry)
     assert entry.runtime_data is not coordinator
+
+
+@pytest.mark.parametrize("source", ["reconfigure", "reauth"])
+@pytest.mark.parametrize("tls", [False, True])
+async def test_saved_default_port_form_round_trip(hass, entry, controllers, source, tls):
+    hass.config_entries.async_update_entry(entry, data=DATA | {"port": None, "use_ssl": tls})
+    await setup(hass, entry)
+    form = await hass.config_entries.flow.async_init(DOMAIN, context={"source": source, "entry_id": entry.entry_id},
+                                                    data=entry.data if source == "reauth" else None)
+    submitted = form["data_schema"]({})
+    assert submitted["port"] == 0
+    result = await hass.config_entries.flow.async_configure(form["flow_id"], submitted)
+    assert result["type"] is FlowResultType.ABORT
+    await hass.async_block_till_done()
+    assert entry.data["port"] is None
+    assert entry.runtime_data.client.base_url.endswith(f":{4443 if tls else 80}")
+
+
+@pytest.mark.parametrize("source", ["reconfigure", "reauth"])
+async def test_connection_form_preserves_unrelated_entry_data(hass, entry, controllers, source):
+    # Future entry metadata must survive partial form updates. No runtime support
+    # for this synthetic field is claimed; test the flow's storage boundary.
+    hass.config_entries.async_update_entry(entry, data=DATA | {"port": 8080, "future_metadata": "keep"})
+    form = await hass.config_entries.flow.async_init(DOMAIN, context={"source": source, "entry_id": entry.entry_id},
+                                                    data=entry.data if source == "reauth" else None)
+    with patch.object(hass.config_entries, "async_reload", return_value=True):
+        result = await hass.config_entries.flow.async_configure(form["flow_id"], DATA | {"port": 0})
+        await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.ABORT
+    assert entry.data["port"] is None
+    assert entry.data["future_metadata"] == "keep"
+
+
+async def test_file_refresh_button_routes_through_ha_services(hass, entry, controllers):
+    await setup(hass, entry)
+    current = controllers["controller.local"]
+    assert current["requests"].count("fileList") == 1
+    current["files"] = [{"file": "fresh.pl"}]
+    await entry.runtime_data.async_refresh()
+    assert current["requests"].count("fileList") == 1
+    await hass.services.async_call("button", "press", {"entity_id": entity_id(hass, entry, "button", "refresh")}, blocking=True)
+    await hass.async_block_till_done()
+    assert current["requests"].count("fileList") == 2
+    assert hass.states.get(entity_id(hass, entry, "select", "playlist")).attributes["options"] == ["fresh.pl"]
+    assert current["commands"] == []
+
+
+@pytest.mark.parametrize("stage", ["flow", "setup", "poll", "command"])
+async def test_malformed_error_code_is_sanitized_at_ha_boundaries(hass, entry, monkeypatch, caplog, stage):
+    # Exercise the actual client envelope parser with synthetic HTTP responses;
+    # only aiohttp transport is replaced, not _exchange or HA error handling.
+    current = device()
+    secret = "test-error-envelope-password"
+    auth_hash = password_hash(secret)
+    authenticated_url = f"http://controller.local/v1.9/?user=admin&auth={auth_hash}"
+    fault = {"request": "constantRead" if stage in ("flow", "setup") else None}
+
+    @asynccontextmanager
+    async def request(session, method, url, **kwargs):
+        body = kwargs.get("json")
+        name = body["req"] if body else "version"
+        if name == "version":
+            result = current["version"]
+        elif name.endswith("Read"):
+            key = name[:-4]
+            result = {key: current[key]}
+        elif name == "fileList":
+            result = {"files": current["files"]}
+        else:
+            result = {}
+        response = {"resp": name, "result": result}
+        if name == fault["request"]:
+            response = {"resp": name, "err": {"code": {"request_url": authenticated_url}, "msg": authenticated_url}}
+        yield SimpleNamespace(status=200, json=AsyncMock(return_value=response))
+
+    monkeypatch.setattr(aiohttp.ClientSession, "request", request)
+    hass.config_entries.async_update_entry(entry, data=DATA | {"password": secret})
+    if stage == "flow":
+        flow = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+        result = await hass.config_entries.flow.async_configure(flow["flow_id"], dict(entry.data))
+        assert result["errors"] == {"base": "cannot_connect"}
+    elif stage == "setup":
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        assert entry.state is ConfigEntryState.SETUP_RETRY
+    else:
+        await setup(hass, entry)
+        coordinator = entry.runtime_data
+        if stage == "poll":
+            fault["request"] = "statusRead"
+            await coordinator.async_refresh()
+            assert not coordinator.last_update_success
+            assert str(coordinator.last_exception) == "Invalid controller error response"
+        else:
+            fault["request"] = "modePlayback"
+            with pytest.raises(HomeAssistantError, match="^Invalid controller error response$") as error:
+                await hass.services.async_call("button", "press", {"entity_id": entity_id(hass, entry, "button", "blank")}, blocking=True)
+            assert auth_hash not in str(error.value)
+    assert secret not in caplog.text
+    assert auth_hash not in caplog.text
+    assert authenticated_url not in caplog.text
