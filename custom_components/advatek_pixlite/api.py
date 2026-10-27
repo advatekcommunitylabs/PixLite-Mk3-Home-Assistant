@@ -23,6 +23,22 @@ class UnsupportedDevice(PixLiteError):
     """Not a supported Mk3 API."""
 
 
+class IdentityMismatch(PixLiteError):
+    """The configured address now belongs to a different controller."""
+
+
+def normalize_mac(value):
+    """Validate identity before using it in HA's persistent registries."""
+    if not isinstance(value, str) or not re.fullmatch(
+        r"(?:[0-9a-fA-F]{12}|[0-9a-fA-F]{2}(?:-[0-9a-fA-F]{2}){5}|[0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5})", value
+    ):
+        raise PixLiteError("Invalid controller MAC address")
+    mac = value.replace("-", "").replace(":", "").lower()
+    if mac in ("000000000000", "ffffffffffff"):
+        raise PixLiteError("Invalid controller MAC address")
+    return mac
+
+
 def password_hash(password):
     return base64.urlsafe_b64encode(hashlib.sha256(password.encode()).digest()).decode().rstrip("=")
 
@@ -68,7 +84,10 @@ class PixLiteClient:
             raise PixLiteError("Unexpected response type")
         if "err" in data:
             error = data["err"]
-            code = error.get("code") if isinstance(error, dict) else None
+            if not isinstance(error, dict) or type(error.get("code")) is not int:
+                # Never reflect arbitrary response JSON: it can contain credentials.
+                raise PixLiteError("Invalid controller error response")
+            code = error["code"]
             raise PixLiteError(f"Controller rejected {expected} (code {code})", code)
         result = data.get("result", {})
         if not isinstance(result, dict):
@@ -90,19 +109,47 @@ class PixLiteClient:
 
     async def initialize(self):
         self.version = await self._exchange("GET", "/ver")
-        versions = self.version.get("apiVer", [])
-        if not any(v.get("maj") == "v1" and len(v.get("min", [])) == 2
-                   and v["min"][0] <= 9 <= v["min"][1] for v in versions):
+        versions = self.version.get("apiVer")
+        if not isinstance(versions, list):
+            raise PixLiteError("Invalid API version list")
+        if "nickname" in self.version and not isinstance(self.version["nickname"], str):
+            raise PixLiteError("Invalid controller nickname")
+        for version in versions:
+            if not isinstance(version, dict) or not isinstance(version.get("maj"), str):
+                raise PixLiteError("Invalid API version entry")
+            limits = version.get("min")
+            if (not isinstance(limits, list) or len(limits) != 2
+                    or any(type(value) is not int or value < 0 for value in limits)
+                    or limits[0] > limits[1]):
+                raise PixLiteError("Invalid API version range")
+        if not any(v["maj"] == "v1" and v["min"][0] <= 9 <= v["min"][1] for v in versions):
             raise UnsupportedDevice("Controller must support API v1.9")
-        self.constants = await self.read("constant", ["dev", "ver"])
-        dev = self.constants.get("dev", {})
-        if dev.get("prodFamilyName") != "PixLite Mk3" or not dev.get("macAddr"):
+        constants = await self.read("constant", ["dev", "ver"])
+        dev = constants.get("dev")
+        if not isinstance(dev, dict):
+            raise PixLiteError("Invalid controller device object")
+        normalize_mac(dev.get("macAddr"))
+        if dev.get("prodFamilyName") != "PixLite Mk3":
             raise UnsupportedDevice("Expected a PixLite Mk3 with a MAC address")
+        if not isinstance(dev.get("prodName"), str) or not dev["prodName"].strip():
+            raise PixLiteError("Invalid controller product name")
+        if "ver" in constants and not isinstance(constants["ver"], dict):
+            raise PixLiteError("Invalid controller firmware object")
+        self.constants = constants
         return self.constants
 
     @property
     def unique_id(self):
-        return self.constants["dev"]["macAddr"].replace("-", "").replace(":", "").lower()
+        return normalize_mac(self.constants.get("dev", {}).get("macAddr"))
+
+    async def verify_identity(self, expected_id):
+        """Detect address reuse; this is not cryptographic authentication."""
+        constants = await self.read("constant", ["dev.macAddr"])
+        dev = constants.get("dev")
+        if not isinstance(dev, dict):
+            raise PixLiteError("Invalid controller device object")
+        if normalize_mac(dev.get("macAddr")) != expected_id:
+            raise IdentityMismatch("Controller identity mismatch at configured address; reconfigure the original controller or add the replacement separately")
 
     async def files(self):
         result = await self.request("fileList", {"pattern": ["*.scn", "*.pl"]})

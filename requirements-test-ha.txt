@@ -1,0 +1,6 @@
+# Exact HA test boundary; newer HA versions and physical hardware need separate validation.
+pytest-homeassistant-custom-component==0.13.202
+homeassistant==2025.1.1
+# Match the HA 2025 dependency era. Newer pycares introduces a process-global
+# shutdown thread with no public stop API, incompatible with HA's leak checks.
+pycares==4.5.0

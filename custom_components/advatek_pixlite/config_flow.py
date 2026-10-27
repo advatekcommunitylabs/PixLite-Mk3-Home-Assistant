@@ -33,6 +33,7 @@ class PixLiteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             data = dict(user_input)
             data.setdefault("password", "")
+            data["port"] = data.get("port") or None
             try:
                 data["host"] = normalize_host(data["host"])
                 client = PixLiteClient(async_get_clientsession(self.hass), **data)
@@ -50,6 +51,8 @@ class PixLiteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if entry:
                     if entry.unique_id != client.unique_id:
                         return self.async_abort(reason="wrong_device")
+                    # port is explicitly None when cleared; merge preserves any
+                    # entry metadata outside this connection form.
                     return self.async_update_reload_and_abort(entry, data_updates=data)
                 self._abort_if_unique_id_configured()
                 title = client.version.get("nickname") or client.constants["dev"]["prodName"]
@@ -65,6 +68,6 @@ class PixLiteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Optional("password", default=defaults.get("password", "")): selector.TextSelector(
                 selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)),
             vol.Required("use_ssl", default=defaults.get("use_ssl", False)): bool,
-            vol.Optional("port", **({"default": defaults["port"]} if "port" in defaults else {})): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
+            vol.Optional("port", default=defaults.get("port") or 0): vol.All(vol.Coerce(int), vol.Range(min=0, max=65535)),
         })
         return self.async_show_form(step_id=step, data_schema=schema, errors=errors)

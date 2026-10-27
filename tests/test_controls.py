@@ -190,8 +190,8 @@ async def test_multi_command_actions_do_not_interleave(modules):
     async def request(name, params):
         requests.append(name)
         await asyncio.sleep(0)
-    client = SimpleNamespace(request=request)
-    coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test"), client)
+    client = SimpleNamespace(request=request, verify_identity=AsyncMock())
+    coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test", unique_id="aabbcc000001"), client)
     coordinator.async_request_refresh = AsyncMock()
     await asyncio.gather(coordinator.commands([("color", {}), ("intensity", {})]), coordinator.command("pause"))
     assert requests == ["color", "intensity", "pause"]
@@ -199,8 +199,8 @@ async def test_multi_command_actions_do_not_interleave(modules):
 
 @pytest.mark.asyncio
 async def test_partial_command_failure_refreshes_without_retry(modules):
-    client = SimpleNamespace(request=AsyncMock(side_effect=[{}, modules.coordinator.PixLiteError("rejected")]))
-    coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test"), client)
+    client = SimpleNamespace(verify_identity=AsyncMock(), request=AsyncMock(side_effect=[{}, modules.coordinator.PixLiteError("rejected")]))
+    coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test", unique_id="aabbcc000001"), client)
     coordinator.async_request_refresh = AsyncMock()
     with pytest.raises(Exception, match="rejected"):
         await coordinator.commands([("color", {}), ("intensity", {})])
@@ -211,9 +211,9 @@ async def test_partial_command_failure_refreshes_without_retry(modules):
 @pytest.mark.asyncio
 async def test_poll_refreshes_external_palette_and_colour_type_without_sd(modules):
     config = {"pix": {"colorType": "RGBW"}, "operIf": {"pal": [[1, 2, 3, 4]], "colorRes": "16Bit"}}
-    client = SimpleNamespace(constants={"dev": {}}, read=AsyncMock(side_effect=[{"mode": "live"}, {}, config]),
+    client = SimpleNamespace(constants={"dev": {}}, verify_identity=AsyncMock(), read=AsyncMock(side_effect=[{"mode": "live"}, {}, config]),
                              files=AsyncMock(side_effect=modules.coordinator.PixLiteError("No card", 14)))
-    coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test"), client)
+    coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test", unique_id="aabbcc000001"), client)
     result = await coordinator._async_update_data()
     assert result["config"] == config
     assert result["files"] == []
@@ -284,9 +284,9 @@ async def test_discrete_transport_buttons(modules, coordinator):
 
 @pytest.mark.asyncio
 async def test_poll_requests_aux_fields_on_capable_devices(modules):
-    client = SimpleNamespace(constants={"dev": {"auxPorts": 1}},
+    client = SimpleNamespace(constants={"dev": {"auxPorts": 1}}, verify_identity=AsyncMock(),
                              read=AsyncMock(side_effect=[{}, {}, {}]), files=AsyncMock(return_value=[]))
-    coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test"), client)
+    coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test", unique_id="aabbcc000001"), client)
     await coordinator._async_update_data()
     calls = client.read.call_args_list
     assert "auxData" in calls[1].args[1]
@@ -359,3 +359,50 @@ async def test_playlist_rejects_unknown_files_and_queueing(modules, coordinator)
     with pytest.raises(Exception, match="not supported"):
         await player.async_play_media("playlist", "show.pl", enqueue="add")
     coordinator.command.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("code", [10, 14, None])
+async def test_file_attempt_interval_and_reinsertion(modules, monkeypatch, code):
+    now = [1000.0]
+    monkeypatch.setattr(modules.coordinator.time, "monotonic", lambda: now[0])
+    client = SimpleNamespace(constants={"dev": {}}, read=AsyncMock(return_value={}),
+                             files=AsyncMock(), verify_identity=AsyncMock())
+    if code:
+        client.files.side_effect = modules.coordinator.PixLiteError("Unavailable media", code)
+    else:
+        client.files.return_value = ["existing.pl"]
+    c = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test", unique_id="acde48000080"), client)
+    c.files = ["existing.pl"]
+    await c._async_update_data()
+    assert c.files == ([] if code == 14 else ["existing.pl"])
+    now[0] = 1010
+    await c._async_update_data()
+    assert client.files.await_count == 1
+    client.files.side_effect = None
+    client.files.return_value = ["inserted.pl"]
+    now[0] = 1060
+    await c._async_update_data()
+    assert client.files.await_count == 2
+    assert c.files == ["inserted.pl"]
+    c.files_updated = 0
+    now[0] = 1061
+    await c._async_update_data()
+    assert client.files.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_unexpected_file_errors_fail_update_and_require_identity_check(modules):
+    client = SimpleNamespace(constants={"dev": {}}, read=AsyncMock(return_value={}),
+                             files=AsyncMock(side_effect=modules.coordinator.PixLiteError("Failure", 999)),
+                             verify_identity=AsyncMock())
+    c = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test", unique_id="acde48000080"), client)
+    with pytest.raises(modules.coordinator.UpdateFailed):
+        await c._async_update_data()
+    assert not c.identity_verified
+    assert c.files_updated == 0
+    client.files.side_effect = None
+    client.files.return_value = []
+    await c._async_update_data()
+    assert client.verify_identity.await_count == 2
+    client.verify_identity.assert_awaited_with("acde48000080")
