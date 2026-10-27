@@ -7,7 +7,7 @@ Local custom integration, version 0.4.1. Add one entry per controller; controlle
 1. Copy `custom_components/advatek_pixlite` into your Home Assistant configuration directory, resulting in `/config/custom_components/advatek_pixlite/manifest.json`.
 2. Restart Home Assistant.
 3. Open **Settings > Devices & services > Add integration > Advatek PixLite Mk3**.
-4. Enter the controller address, user (Administrator or enabled Operator) and password. An empty password is supported. HTTP defaults to 80; HTTPS defaults to 4443. Leave the optional port blank for these defaults. For Advatek HTTPS, enter its IPv4 address and the controller MAC from its label. Confirm that the address is on a reachable subnet. Existing entries can enable this through Reconfigure.
+4. Enter the controller address, user (Administrator or enabled Operator) and password. An empty password is supported. HTTP defaults to 80; HTTPS defaults to 4443. Set port to 0 to use these defaults or clear a saved override. For Advatek HTTPS, enter its IPv4 address and the controller MAC from its label. Confirm that the address is on a reachable subnet. Existing entries can enable this through Reconfigure.
 5. Repeat for each additional controller. Assign each device a useful name and area.
 
 Requires a controller advertising API **v1.9** and a modern Home Assistant installation supporting config entry `runtime_data`. This preparation targets Home Assistant 2026.10.2 and Python 3.14.2 or later. Earlier Home Assistant versions are not a verified compatibility target. See CONTRIBUTING.md for the Linux runtime test procedure and Core contribution preparation. Use **Reconfigure** on the integration entry after an IP address or password change. A replacement controller with a different MAC should be added separately.
@@ -127,7 +127,7 @@ This implementation uses HTTP polling; Advatek recommends WebSockets for push up
 
 ## Validation
 
-`tests/test_api.py` runs the actual aiohttp client against a local HTTP simulator. It checks authentication encoding, version gating, endpoint/message formatting, serialization, file enumeration, result-less responses, and HTTP/API failures. `tests/test_controls.py` tests light/palette/priority behaviour and compound-command handling using lightweight HA interface doubles. These tests do not boot Home Assistant or substitute for hardware testing.
+`tests/test_api.py` runs the actual aiohttp client against a local HTTP simulator. It checks authentication encoding, version gating, endpoint/message formatting, serialization, file enumeration, result-less responses, and HTTP/API failures. `tests/test_controls.py` tests light/palette/priority behaviour and compound-command handling using lightweight HA interface doubles. These tests do not boot Home Assistant or substitute for hardware testing. `tests/ha` retains the config-flow, service-routing and lifecycle regressions from PR #1, with only controller transport mocked. Its port and entity-label assertions follow this branch's optional-port and extensionless-file interfaces.
 
 `tests/test_colour_contract.py` exercises real Home Assistant light/number service handlers, entity registries and state publication against an in-memory controller. It does not test a complete integration setup or physical output. With the Home Assistant dependencies installed, run it locally without the Linux-specific custom-component pytest plugin:
 
@@ -142,7 +142,9 @@ python -m pytest tests/test_api.py tests/test_controls.py -q
 python -m compileall -q custom_components
 ```
 
-Before relying on automations, test one controller: add it, compare readings with its UI, start a known scene, dim it, turn the light off/on, pick a solid colour and palette preset, check live intensity priority, pause/resume, blackout, restore live mode, unplug/reconnect the network, and test a second controller independently. Test missing SD media, credential changes and DHCP changes as well. Physical hardware and an interactive installation remain unverified. Linux tests exercise actual Home Assistant interfaces with a simulated controller; check the current PR results before relying on this branch.
+Run the plugin-based HA suites separately from tests that replace HA interfaces, using the current target versions in `requirements-test-ha.txt`. PR #1's recorded HA 2025.1.1 results are historical evidence, not compatibility evidence for this branch. The retained workflow is manual-only, repository Actions stays disabled, and no CI run is authorised by these instructions.
+
+Paired A4-S/E16-S operating and read-only HTTPS results are recorded with their exact revisions in [the per-device audit](docs/per-device-audit.md) and [reconciled client verification](docs/reviews/2026-10-26-reconciled-client-verification.md). The [merge reconciliation](docs/reviews/2026-10-27-pr2-merge-reconciliation.md) records whether the production files still match that tested source. Supported deployment of the Windows cleanup correction and human release review remain open; this development preview is not a Core release or quality-tier qualification.
 
 ## References
 

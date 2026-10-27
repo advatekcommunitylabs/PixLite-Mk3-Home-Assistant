@@ -626,3 +626,50 @@ async def test_colour_write_failure_refreshes_without_retry(modules, failure_ind
         await coordinator.color_commands(lambda data: [("modePlayback", {}), ("progInt", {})])
     assert client.request.await_count == failure_index + 1
     coordinator.async_refresh.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("code", [10, 14, None])
+async def test_file_attempt_interval_and_reinsertion(modules, monkeypatch, code):
+    now = [1000.0]
+    monkeypatch.setattr(modules.coordinator.time, "monotonic", lambda: now[0])
+    client = SimpleNamespace(constants={"dev": {}}, read=AsyncMock(return_value={}),
+                             files=AsyncMock(), verify_identity=AsyncMock())
+    if code:
+        client.files.side_effect = modules.coordinator.PixLiteError("Unavailable media", code)
+    else:
+        client.files.return_value = ["existing.pl"]
+    c = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test", unique_id="acde48000080"), client)
+    c._verify_identity = AsyncMock()
+    c.files = ["existing.pl"]
+    await c._async_update_data()
+    assert c.files == ([] if code == 14 else ["existing.pl"])
+    now[0] = 1010
+    await c._async_update_data()
+    assert client.files.await_count == 1
+    client.files.side_effect = None
+    client.files.return_value = ["inserted.pl"]
+    now[0] = 1060
+    await c._async_update_data()
+    assert client.files.await_count == 2
+    assert c.files == ["inserted.pl"]
+    c.files_updated = 0
+    now[0] = 1061
+    await c._async_update_data()
+    assert client.files.await_count == 3
+
+@pytest.mark.asyncio
+async def test_unexpected_file_errors_fail_update_and_require_identity_check(modules):
+    client = SimpleNamespace(constants={"dev": {}}, read=AsyncMock(return_value={}),
+                             files=AsyncMock(side_effect=modules.coordinator.PixLiteError("Failure", 999)),
+                             verify_identity=AsyncMock())
+    c = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test", unique_id="acde48000080"), client)
+    c._verify_identity = AsyncMock()
+    with pytest.raises(modules.coordinator.UpdateFailed):
+        await c._async_update_data()
+    assert c.files_updated == 0
+    client.files.side_effect = None
+    client.files.return_value = []
+    await c._async_update_data()
+    assert c._verify_identity.await_count == 2
+    c._verify_identity.assert_awaited_with()

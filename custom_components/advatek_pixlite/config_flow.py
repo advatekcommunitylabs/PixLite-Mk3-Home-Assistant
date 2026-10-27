@@ -44,7 +44,7 @@ class PixLiteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             data = dict(user_input)
             data.setdefault("password", "")
-            data.setdefault("port", None)
+            data["port"] = data.get("port") or None
             try:
                 data["host"] = normalize_host(data["host"])
                 client = PixLiteClient(async_get_clientsession(self.hass), **data)
@@ -100,9 +100,8 @@ class PixLiteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     "expected_mac", default=defaults.get("expected_mac", "")
                 ): str,
                 probatio.Optional(
-                    "port",
-                    **({"default": defaults["port"]} if defaults.get("port") is not None else {}),
-                ): probatio.Port(),
+                    "port", default=defaults.get("port") or 0,
+                ): probatio.All(probatio.Coerce(int), probatio.Range(min=0, max=65535)),
             }
         )
         return self.async_show_form(step_id=step, data_schema=schema, errors=errors)

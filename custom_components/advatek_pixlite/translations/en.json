@@ -4,37 +4,37 @@
     "step": {
       "user": {
         "title": "Connect a PixLite Mk3",
-        "description": "Enter the controller address. HTTPS uses port 4443. For Advatek HTTPS, enter its IPv4 address and the MAC from its label. Leave MAC blank only for conventional hostname and CA validation. The controller must be on a reachable subnet.",
+        "description": "Enter the controller address. Set port to 0 to use HTTP 80 or HTTPS 4443. For Advatek HTTPS, enter its IPv4 address and the MAC from its label. Leave MAC blank only for conventional hostname and CA validation. The controller must be on a reachable subnet.",
         "data": {
           "host": "IP address or hostname",
           "username": "User type",
           "password": "Password",
           "use_ssl": "Use HTTPS",
-          "port": "Port (optional)",
+          "port": "Port (0 = protocol default)",
           "expected_mac": "Controller MAC (for Advatek HTTPS)"
         }
       },
       "reconfigure": {
         "title": "Connect a PixLite Mk3",
-        "description": "Enter the controller address. HTTPS uses port 4443. For Advatek HTTPS, enter its IPv4 address and the MAC from its label. Leave MAC blank only for conventional hostname and CA validation. The controller must be on a reachable subnet.",
+        "description": "Enter the controller address. Set port to 0 to use HTTP 80 or HTTPS 4443. For Advatek HTTPS, enter its IPv4 address and the MAC from its label. Leave MAC blank only for conventional hostname and CA validation. The controller must be on a reachable subnet.",
         "data": {
           "host": "IP address or hostname",
           "username": "User type",
           "password": "Password",
           "use_ssl": "Use HTTPS",
-          "port": "Port (optional)",
+          "port": "Port (0 = protocol default)",
           "expected_mac": "Controller MAC (for Advatek HTTPS)"
         }
       },
       "reauth_confirm": {
         "title": "Connect a PixLite Mk3",
-        "description": "Enter the controller address. HTTPS uses port 4443. For Advatek HTTPS, enter its IPv4 address and the MAC from its label. Leave MAC blank only for conventional hostname and CA validation. The controller must be on a reachable subnet.",
+        "description": "Enter the controller address. Set port to 0 to use HTTP 80 or HTTPS 4443. For Advatek HTTPS, enter its IPv4 address and the MAC from its label. Leave MAC blank only for conventional hostname and CA validation. The controller must be on a reachable subnet.",
         "data": {
           "host": "IP address or hostname",
           "username": "User type",
           "password": "Password",
           "use_ssl": "Use HTTPS",
-          "port": "Port (optional)",
+          "port": "Port (0 = protocol default)",
           "expected_mac": "Controller MAC (for Advatek HTTPS)"
         }
       }

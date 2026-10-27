@@ -1,0 +1,4 @@
+# Current custom-integration target; historical PR #1 evidence used HA 2025.1.1.
+pytest-homeassistant-custom-component==0.13.373
+homeassistant==2026.10.2
+pyOpenSSL==26.4.0

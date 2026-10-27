@@ -462,7 +462,7 @@ async def test_reconfigure_can_clear_custom_port(devices):
                 data=None,
             )
             assert form["type"] == "form"
-            assert form["data_schema"]({}).get("port") is None
+            assert form["data_schema"]({})["port"] == 0
             hass.config_entries.flow.async_abort(form["flow_id"])
 
 
