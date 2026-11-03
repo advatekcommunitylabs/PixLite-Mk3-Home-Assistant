@@ -7,23 +7,23 @@ Local custom integration, version 0.4.1. Add one entry per controller; controlle
 1. Copy `custom_components/advatek_pixlite` into your Home Assistant configuration directory, resulting in `/config/custom_components/advatek_pixlite/manifest.json`.
 2. Restart Home Assistant.
 3. Open **Settings > Devices & services > Add integration > Advatek PixLite Mk3**.
-4. Enter the controller IP address/hostname, user (Administrator or enabled Operator) and password. An empty password is supported. HTTP defaults to 80; HTTPS defaults to 4443. Set the port to 0 (the default) to use these protocol defaults. When reconfiguring an entry, changing a custom port back to 0 clears the override.
+4. Enter the controller address, user (Administrator or enabled Operator) and password. An empty password is supported. HTTP defaults to 80; HTTPS defaults to 4443. Set port to 0 to use these defaults or clear a saved override. For Advatek HTTPS, enter its IPv4 address and the controller MAC from its label. Confirm that the address is on a reachable subnet. Existing entries can enable this through Reconfigure.
 5. Repeat for each additional controller. Assign each device a useful name and area.
 
-Requires a controller advertising API **v1.9** and a modern Home Assistant installation supporting config entry `runtime_data`. The real-HA test environment is pinned to Home Assistant 2025.1.1 on Python 3.13. CI results, review dispositions and remaining hardware-validation limits are recorded in `docs/reviews/2026-10-26-review-fixes.md`; this is not a blanket compatibility claim for other versions. Use **Reconfigure** on the integration entry after an IP address or password change. A replacement controller with a different MAC should be added separately.
+Requires a controller advertising API **v1.9** and a modern Home Assistant installation supporting config entry `runtime_data`. This preparation targets Home Assistant 2026.10.2 and Python 3.14.2 or later. Earlier Home Assistant versions are not a verified compatibility target. See CONTRIBUTING.md for the Linux runtime test procedure and Core contribution preparation. Use **Reconfigure** on the integration entry after an IP address or password change. A replacement controller with a different MAC should be added separately.
 
 ## Controls and monitoring
 
 - **Pixels** light entity provides on/off, master brightness, a colour picker and transitions. Brightness-only commands preserve the current scene, playlist or live mode.
 - **Showtime colour preset** selects one of up to 12 controller palette colours. It starts solid-colour playback, preserves the current intensity, and uses Showtime's configured fade time. Turn the light on if master intensity is zero. Presets are read from the controller and refresh with polling; editing/saving the controller palette is not included.
 - **Intensity priority** selects Override live intensity or Yield to live intensity. Explicit light on/off/brightness commands take priority again. Yield allows incoming live intensity to win when available; otherwise the programmed factor applies.
-- **Showtime file** select lists `.scn` scenes and `.pl` playlists on the microSD card. Selecting a file starts it immediately and loops indefinitely (`cnt: 0`). Selecting it again via an action restarts it.
-- Separate **Play**, **Pause**, **Previous** and **Next** playback buttons with matching icons. Play resumes an existing file playback; choose a Showtime file to start a scene. Previous and Next navigate playlist items, not the file browser. Existing button unique IDs are preserved, including the former Resume button.
+- **Showtime scene** and **Showtime playlist** are separate dropdowns. Names hide the `.scn` and `.pl` suffixes; selecting a name still sends its complete filename to the controller. Selecting it starts playback immediately and loops indefinitely (`cnt: 0`). Selecting it again via an action restarts it.
+- Separate **Play**, **Pause**, **Previous** and **Next** playback buttons with matching icons. Play resumes an existing file playback; choose a Showtime scene to start one. Previous and Next navigate playlist items, not the file browser. Existing button unique IDs are preserved, including the former Resume button.
 - Other buttons: Blank, Freeze, Live Data, Restart current mode, Refresh Showtime files.
 - **Aux N intensity** faders (0–100%) appear for auxiliary ports configured as DMX Output. Adjusting a fader takes priority over live intensity for that auxiliary output without changing pixel brightness or playback mode. Values reflect the currently controlling intensity. The integration detects newly enabled DMX outputs while polling; previously added faders become unavailable when their port is changed to input or disabled.
-- The device Sensors section shows temperature, CPU usage, input/output frame rate, input bank voltages, and supported per-output currents, voltages and power status. Operating mode and playback status remain diagnostic sensors.
+- The device exposes controller health as diagnostics, with temperature, bank input voltages and output power status enabled by default for new entries. CPU usage, frame rates, per-output current/voltage and duplicate playback detail sensors are available to enable. Mode remains a primary sensor. Existing registry names and enabled states are preserved. See docs/sensor-organization.md for the full layout.
 - Binary sensors: playback error and playback paused.
-- Status and measurements refresh every 10 seconds; the file list refreshes every 60 seconds. Commands request an immediate refresh. Disconnected controllers become unavailable and polling retries automatically. Every poll and each output request, including each part of a compound light action, checks the MAC first. A mismatch blocks output commands and requires correcting the address or adding the replacement controller separately. These checks detect address reuse; they are not cryptographic device authentication and cannot prevent a device changing between separate HTTP requests. Partially delivered actions are refreshed and never replayed automatically.
+- Status and measurements refresh every 10 seconds; the file list refreshes every 60 seconds. Commands request an immediate refresh. Disconnected controllers become unavailable and polling retries automatically.
 
 Blank blanks the controller outputs; it does not remove electrical power. Live Data restores configured streaming input. Pause/Resume require an applicable file playback, and Previous/Next require a playlist; invalid commands return a controller error. Restart current mode can also restart recording if recording is active. The API's `Stop` only exits transient modes and is deliberately not presented as a universal stop button.
 
@@ -33,7 +33,9 @@ The light controls the **pixel outputs together**, not individual pixel ports or
 
 Turning the light off sets programmed intensity to zero and keeps playback running. Turning it on restores the last non-zero brightness remembered during this HA session (255 after a reload if no prior value is known). Selecting a colour replaces the current scene/live mode with a continuous solid colour. The separate Blank button enters a blank playback mode; a light On without a brightness or colour value after Blank starts white solid-colour playback. A brightness-only command preserves even a blank mode.
 
-RGB pixels expose an RGB picker; RGBW pixels expose RGBW. RGBWX pixels expose RGBW and preserve the X channel from an existing solid colour, or use X=0 when switching from other modes. X is not assumed to be warm/cold white. Palette presets preserve all five channels and their original 8/16-bit values. The picker sends 8-bit HA colour values scaled to 16-bit; arbitrary 16-bit picker precision and separate X editing are not exposed.
+RGB pixels expose an RGB picker; RGBW pixels expose RGBW. RGBWX pixels expose RGBW and preserve the X channel from an existing solid colour, or use X=0 when switching from other modes. Optional **Solid colour W** and **Solid colour X** number entities provide independent raw 16-bit editing on supported controllers. Enable them in the entity settings. They are available during valid solid-colour playback and preserve the other channels and master intensity. Start a solid colour with the picker or a palette preset before editing W/X. X is not assumed to be warm/cold white; native RGBCCT temperature control is not implemented. See [colour coverage and verification requirements](docs/colour-model.md).
+
+Palette presets preserve all configured channels and their original 8/16-bit values. The picker sends 8-bit HA colour values scaled to 16-bit. Each colour write rereads the controller's colour type and status under the command lock. Missing or unsupported colour types block picker, preset and blank-to-colour writes, while brightness-only control remains available. Invalid channel vectors are rejected. These checks do not resolve the controller identity issue tracked in PR #1.
 
 Transitions are specified in seconds using standard HA light actions and sent in milliseconds. A colour-and-brightness action sends colour playback followed by intensity; these commands are serialized with other actions and polling. They are not an atomic controller transaction. A failure refreshes state to reflect any partially applied change. Status updates reflect controller polling rather than optimistic animation in HA.
 
@@ -55,12 +57,12 @@ triggers:
 actions:
   - action: select.select_option
     target:
-      entity_id: select.garden_pixlite_showtime_file
+      entity_id: select.garden_pixlite_showtime_playlist
     data:
-      option: "Evening.pl"
+      option: "Evening"
 ```
 
-For several controllers, target multiple select entities if they contain the same filename, or use separate actions for different filenames. This is automation-level triggering, not frame-synchronized playback across controllers.
+For several controllers, target multiple playlist select entities if they contain the same playlist name, or use separate actions for different names. This is automation-level triggering, not frame-synchronized playback across controllers.
 
 Dim the running scene without replacing it:
 
@@ -89,11 +91,13 @@ data:
 
 Playlists already stored as `.pl` files on the controller are supported in three places:
 
-- **Showtime playlist** is a playlist-only dropdown. Selecting a playlist starts it immediately and repeats continuously. The original Showtime file selector remains available for existing automations.
+- **Showtime playlist** is a playlist-only dropdown. Selecting a playlist starts it immediately and repeats continuously. **Showtime scene** lists scenes separately.
 - **Showtime playlist player** is a Home Assistant media player entity with a browser for stored playlists, Play/Pause and Previous/Next controls. It represents lighting playback, not audio, and has no volume control.
 - **Playlist item**, **Playlist item type**, and **Playlist item file** sensors expose the current item. The player also has attributes for the item colour, elapsed playback seconds, repeat count and playback error code. Item position is reported exactly as supplied by the controller. The item filename is unknown for colour/blank/freeze items.
 
 The player follows playlists started externally in Showtime too. Status refreshes every 10 seconds; the file browser refreshes every 60 seconds or using Refresh Showtime files. A missing SD card produces an empty browser. It may take the next status poll for the controller to report the first playlist item after starting playback.
+
+Dropdown options, browser titles, player titles and playback-name sensors omit file extensions. The controller's filenames and media content IDs retain them, including `media_content_id: "Evening.pl"` below. Existing select automations must use the extensionless option and target the playlist selector for playlists. Entity unique IDs are retained, so an existing scene selector may still have its former `showtime_file` entity ID.
 
 Play resumes an active playlist; use the browser or dropdown to start one. Previous/Next navigate items within that playlist. No seek, shuffle, queue editing, playlist creation/uploads, or synchronized multi-controller playback is exposed. Use Blank or Live Data to leave playlist playback. A playlist error is represented by an idle player plus the existing Playback error binary sensor and error-code attribute.
 
@@ -115,13 +119,22 @@ data:
 
 ## Transport and scope
 
-All traffic stays on the local network. The API authenticates with Base64URL(SHA256(password)) query parameters, not HTTP Basic Auth. HTTP sends that reusable credential hash without encryption; use a trusted local network or configure HTTPS with the Advatek CA trusted by the HA environment. Certificate checking is never disabled. Credentials are stored in Home Assistant's config entry storage, and should be protected along with backups. Client errors intentionally omit request URLs.
+All traffic stays on the local network. The API authenticates with Base64URL(SHA256(password)) query parameters, not HTTP Basic Auth. HTTP sends that reusable credential hash without encryption; use a trusted local network or configure Advatek HTTPS. Credentials are stored in Home Assistant's config entry storage, and should be protected along with backups. Client errors intentionally omit request URLs.
+
+Advatek HTTPS authenticates a device-specific certificate profile against an embedded Advatek root and the MAC you enter. It validates the complete certificate path, explicit certificate usage constraints and validity before sending HTTP or credentials, then pins that validated leaf on each API connection. A TLS-only certificate capture sends no application data. Stock Python server-purpose and IP/hostname checks cannot authenticate the observed MAC-CN / Any-EKU certificates, so this narrowly scoped profile replaces those checks for the opted-in entry. Leaving MAC blank retains conventional CA and hostname verification. There is no automatic HTTP fallback, redirect following or operator-command retry. See [HTTPS verification](docs/https.md) for trust provenance, supported profile and limits.
 
 This implementation uses HTTP polling; Advatek recommends WebSockets for push updates, which is a future improvement. No automatic network discovery, firmware updates, scene creation/uploads, pixel mapping changes, per-pixel streaming, or physical-controller configuration changes are included. Scenes/playlists must already exist on the controller. Adding/reloading the integration only reads data; output changes require an explicit entity action.
 
 ## Validation
 
-`tests/test_api.py` runs the actual aiohttp client against a local HTTP simulator. It checks authentication encoding, version gating, endpoint/message formatting, serialization, file enumeration, result-less responses, and HTTP/API failures. `tests/test_controls.py` tests light/palette/priority behaviour and compound-command handling using lightweight HA interface doubles. These focused tests do not boot Home Assistant or substitute for hardware testing. `tests/ha` separately uses the real HA `hass` fixture and `MockConfigEntry`, mocking only controller transport. Run this suite in Linux with the exact dependencies below. CI also runs hassfest manifest validation and retains JUnit/coverage evidence.
+`tests/test_api.py` runs the actual aiohttp client against a local HTTP simulator. It checks authentication encoding, version gating, endpoint/message formatting, serialization, file enumeration, result-less responses, and HTTP/API failures. `tests/test_controls.py` tests light/palette/priority behaviour and compound-command handling using lightweight HA interface doubles. These tests do not boot Home Assistant or substitute for hardware testing. `tests/ha` retains the config-flow, service-routing and lifecycle regressions from PR #1, with only controller transport mocked. Its port and entity-label assertions follow this branch's optional-port and extensionless-file interfaces.
+
+`tests/test_colour_contract.py` exercises real Home Assistant light/number service handlers, entity registries and state publication against an in-memory controller. It does not test a complete integration setup or physical output. With the Home Assistant dependencies installed, run it locally without the Linux-specific custom-component pytest plugin:
+
+```powershell
+$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD = '1'
+python -m pytest -p pytest_asyncio.plugin tests/test_colour_contract.py tests/test_file_display.py -q
+```
 
 ```sh
 python -m pip install aiohttp pytest pytest-asyncio
@@ -129,19 +142,16 @@ python -m pytest tests/test_api.py tests/test_controls.py -q
 python -m compileall -q custom_components
 ```
 
-Run the real Home Assistant suite separately from tests that replace HA interfaces:
+Run the plugin-based HA suites separately from tests that replace HA interfaces, using the current target versions in `requirements-test-ha.txt`. PR #1's recorded HA 2025.1.1 results are historical evidence, not compatibility evidence for this branch. The retained workflow is manual-only, repository Actions stays disabled, and no CI run is authorised by these instructions.
 
-```sh
-python -m pip install -r requirements-test-ha.txt
-python -m pytest tests/ha -q --asyncio-mode=auto
-```
-
-`tests/ha` is excluded from collection when HA is not installed. Such a local protocol-only run is not evidence of HA runtime compatibility. The manual-only Integration tests workflow runs each suite in a separate process. Pushes and pull requests do not automatically start it; dispatch it only when a verification run is authorized.
-
-Before relying on automations, test one controller: add it, compare readings with its UI, start a known scene, dim it, turn the light off/on, pick a solid colour and palette preset, check live intensity priority, pause/resume, blackout, restore live mode, unplug/reconnect the network, and test a second controller independently. Test missing SD media, credential changes and DHCP changes as well. Physical-controller validation remains outstanding. HA automated validation runs against a mocked controller transport, not a physical PixLite.
+Paired A4-S/E16-S operating and read-only HTTPS results are recorded with their exact revisions in [the per-device audit](docs/per-device-audit.md) and [reconciled client verification](docs/reviews/2026-10-26-reconciled-client-verification.md). The [merge reconciliation](docs/reviews/2026-10-27-pr2-merge-reconciliation.md) records whether the production files still match that tested source. Supported deployment of the Windows cleanup correction and human release review remain open; this development preview is not a Core release or quality-tier qualification.
 
 ## References
 
 Implemented from the supplied **PixLite Mk3 API v1.9, V20260617**, especially sections 4, 6, 7.2, 7.7-7.9, 7.13-7.15. The PDF is not redistributed.
 
 Home Assistant developer references: [config flows](https://contributors.home-assistant.io/core/integrations/config-flow/), [coordinated polling](https://contributors.home-assistant.io/core/integrations/fetching-data/), and [select entities](https://contributors.home-assistant.io/core/entities/select/).
+
+## Core contribution preparation
+
+The `core/` source and `script/prepare_core.py` prepare a sensor-only first contribution with the `homeassistant/components` and `tests/components` layout. The existing custom integration retains all seven platforms. The protocol client can be built independently as `advatek-pixlite-client`; it is not published or release-approved. See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution requirements, Linux tests, dependency licensing/publication, documentation/branding work, and required human review. This branch is preparation for review and is not ready to submit upstream.

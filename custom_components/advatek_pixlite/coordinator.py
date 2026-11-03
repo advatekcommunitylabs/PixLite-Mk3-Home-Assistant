@@ -1,6 +1,7 @@
 """Shared polling and controller command handling."""
-from datetime import timedelta
+
 import asyncio
+from datetime import timedelta
 import logging
 import time
 
@@ -12,14 +13,17 @@ from .api import InvalidAuth, PixLiteError
 
 class PixLiteCoordinator(DataUpdateCoordinator):
     def __init__(self, hass, entry, client):
-        super().__init__(hass, logging.getLogger(__name__), name=entry.title,
-                         config_entry=entry, update_interval=timedelta(seconds=10))
+        super().__init__(
+            hass,
+            logging.getLogger(__name__),
+            name=entry.title,
+            config_entry=entry,
+            update_interval=timedelta(seconds=10),
+        )
         self.client = client
         self.files = []
         self.files_updated = 0
         self.control_lock = asyncio.Lock()
-        self.expected_id = entry.unique_id
-        self.identity_verified = True  # Setup has already compared the MAC.
 
     async def _async_update_data(self):
         async with self.control_lock:
@@ -27,10 +31,7 @@ class PixLiteCoordinator(DataUpdateCoordinator):
 
     async def _read_data(self):
         try:
-            # Verify every poll, including replacements without a transport outage.
-            self.identity_verified = False
-            await self.client.verify_identity(self.expected_id)
-            self.identity_verified = True
+            await self._verify_identity()
             status = await self.client.read("status")
             statistic_paths = ["dev", "pixData", "pixPwrOuts"]
             config_paths = ["pix.colorType", "operIf"]
@@ -49,31 +50,49 @@ class PixLiteCoordinator(DataUpdateCoordinator):
                     elif err.code != 10:  # Recording/formatting can prohibit listing.
                         raise
                     self.files_updated = time.monotonic()
-            return {"status": status, "statistic": stats, "files": list(self.files), "config": config}
+            return {
+                "status": status,
+                "statistic": stats,
+                "files": list(self.files),
+                "config": config,
+            }
         except InvalidAuth as err:
-            self.identity_verified = False
             raise ConfigEntryAuthFailed(str(err)) from err
         except PixLiteError as err:
-            self.identity_verified = False
             raise UpdateFailed(str(err)) from err
 
     async def command(self, name, params=None):
         await self.commands([(name, params)])
 
+    async def _verify_identity(self):
+        """Check the entry identity before accepting readings or sending controls."""
+        await self.client.verify_identity(self.config_entry.unique_id)
+
+    async def color_commands(self, build_commands):
+        """Build colour changes from fresh configuration and status under the lock."""
+        try:
+            async with self.control_lock:
+                await self._verify_identity()
+                config = await self.client.read("config", ["pix.colorType", "operIf"])
+                status = await self.client.read("status")
+                snapshot = {**self.data, "config": config, "status": status}
+                for name, params in build_commands(snapshot):
+                    await self._verify_identity()
+                    await self.client.request(name, params)
+        except (PixLiteError, ValueError) as err:
+            await self.async_refresh()
+            raise HomeAssistantError(str(err)) from err
+        await self.async_refresh()
+
     async def commands(self, commands):
         """Keep multi-request light actions together; do not retry output changes."""
         try:
             async with self.control_lock:
-                # Check even before the next scheduled poll, so a command cannot
-                # bypass recovery. Keep identity verification and writes serialized.
                 for name, params in commands:
-                    self.identity_verified = False
-                    await self.client.verify_identity(self.expected_id)
-                    self.identity_verified = True
+                    await self._verify_identity()
                     await self.client.request(name, params)
         except PixLiteError as err:
-            self.identity_verified = False
             # An earlier command may have succeeded; reconcile partial success.
-            await self.async_request_refresh()
+            await self.async_refresh()
             raise HomeAssistantError(str(err)) from err
-        await self.async_request_refresh()
+        await self.async_refresh()

@@ -4,35 +4,38 @@
     "step": {
       "user": {
         "title": "Connect a PixLite Mk3",
-        "description": "Enter the controller address. API v1.9 is required. HTTPS uses port 4443 unless overridden and requires a trusted certificate.",
+        "description": "Enter the controller address. Set port to 0 to use HTTP 80 or HTTPS 4443. For Advatek HTTPS, enter its IPv4 address and the MAC from its label. Leave MAC blank only for conventional hostname and CA validation. The controller must be on a reachable subnet.",
         "data": {
           "host": "IP address or hostname",
           "username": "User type",
           "password": "Password",
           "use_ssl": "Use HTTPS",
-          "port": "Port (0 uses HTTP/HTTPS default)"
+          "port": "Port (0 = protocol default)",
+          "expected_mac": "Controller MAC (for Advatek HTTPS)"
         }
       },
       "reconfigure": {
         "title": "Connect a PixLite Mk3",
-        "description": "Enter the controller address. API v1.9 is required. HTTPS uses port 4443 unless overridden and requires a trusted certificate.",
+        "description": "Enter the controller address. Set port to 0 to use HTTP 80 or HTTPS 4443. For Advatek HTTPS, enter its IPv4 address and the MAC from its label. Leave MAC blank only for conventional hostname and CA validation. The controller must be on a reachable subnet.",
         "data": {
           "host": "IP address or hostname",
           "username": "User type",
           "password": "Password",
           "use_ssl": "Use HTTPS",
-          "port": "Port (0 uses HTTP/HTTPS default)"
+          "port": "Port (0 = protocol default)",
+          "expected_mac": "Controller MAC (for Advatek HTTPS)"
         }
       },
       "reauth_confirm": {
         "title": "Connect a PixLite Mk3",
-        "description": "Enter the controller address. API v1.9 is required. HTTPS uses port 4443 unless overridden and requires a trusted certificate.",
+        "description": "Enter the controller address. Set port to 0 to use HTTP 80 or HTTPS 4443. For Advatek HTTPS, enter its IPv4 address and the MAC from its label. Leave MAC blank only for conventional hostname and CA validation. The controller must be on a reachable subnet.",
         "data": {
           "host": "IP address or hostname",
           "username": "User type",
           "password": "Password",
           "use_ssl": "Use HTTPS",
-          "port": "Port (0 uses HTTP/HTTPS default)"
+          "port": "Port (0 = protocol default)",
+          "expected_mac": "Controller MAC (for Advatek HTTPS)"
         }
       }
     },
@@ -40,13 +43,70 @@
       "invalid_host": "Enter an IPv4 address or hostname without a scheme, path or port.",
       "invalid_auth": "Authentication failed. Check the user and password.",
       "unsupported_device": "A PixLite Mk3 supporting API v1.9 is required.",
-      "cannot_connect": "Cannot communicate with the controller. Check address, credentials, network and TLS certificate."
+      "cannot_connect": "Cannot communicate with the controller. Check address, credentials, network and TLS certificate.",
+      "certificate_untrusted": "HTTPS certificate chain is not trusted. Obtain the Advatek root CA and configure trust in the Home Assistant runtime.",
+      "certificate_identity": "HTTPS certificate identity does not match the configured controller. Check the MAC address against its label.",
+      "certificate_purpose": "HTTPS certificate is not valid for TLS server authentication. Contact Advatek.",
+      "certificate_validity": "HTTPS certificate is expired or not yet valid. Check the Home Assistant clock and contact Advatek.",
+      "certificate_invalid": "HTTPS certificate validation failed. Contact Advatek for the correct certificate setup.",
+      "invalid_mac": "Enter the controller MAC from its label, for example AC:DE:48:00:00:80."
     },
     "abort": {
       "already_configured": "This controller is already configured.",
       "wrong_device": "This is a different controller. Add it as another integration entry.",
       "reauth_successful": "Authentication updated.",
       "reconfigure_successful": "Controller connection updated."
+    }
+  },
+  "entity": {
+    "number": {
+      "solid_color_w": {
+        "name": "Solid colour W"
+      },
+      "solid_color_x": {
+        "name": "Solid colour X"
+      }
+    },
+    "sensor": {
+      "temperature": {
+        "name": "Temperature"
+      },
+      "cpu": {
+        "name": "CPU usage"
+      },
+      "input_rate": {
+        "name": "Input frame rate"
+      },
+      "output_rate": {
+        "name": "Output frame rate"
+      },
+      "mode": {
+        "name": "Mode"
+      },
+      "file": {
+        "name": "Playback file"
+      },
+      "playlist_item": {
+        "name": "Playlist item"
+      },
+      "playlist_item_type": {
+        "name": "Playlist item type"
+      },
+      "playlist_item_file": {
+        "name": "Playlist item file"
+      },
+      "bank_voltage": {
+        "name": "Bank {channel} voltage"
+      },
+      "output_current": {
+        "name": "Output {channel} current"
+      },
+      "output_status": {
+        "name": "Output {channel} power status"
+      },
+      "output_voltage": {
+        "name": "Output {channel} voltage"
+      }
     }
   }
 }

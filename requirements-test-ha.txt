@@ -1,6 +1,4 @@
-# Exact HA test boundary; newer HA versions and physical hardware need separate validation.
-pytest-homeassistant-custom-component==0.13.202
-homeassistant==2025.1.1
-# Match the HA 2025 dependency era. Newer pycares introduces a process-global
-# shutdown thread with no public stop API, incompatible with HA's leak checks.
-pycares==4.5.0
+# Current custom-integration target; historical PR #1 evidence used HA 2025.1.1.
+pytest-homeassistant-custom-component==0.13.373
+homeassistant==2026.10.2
+pyOpenSSL==26.4.0

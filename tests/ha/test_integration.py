@@ -1,5 +1,4 @@
 """Config flows, platform registration, services and lifecycle through HA Core."""
-from copy import deepcopy
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -114,6 +113,11 @@ async def test_setup_auth_failure(hass, entry, controllers):
 
 async def test_all_platforms_units_and_services(hass, entry, controllers):
     await setup(hass, entry)
+    registry = er.async_get(hass)
+    for key in ("output_1_current", "output_rate"):
+        registry.async_update_entity(entity_id(hass, entry, "sensor", key), disabled_by=None)
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
     domains = {state.domain for state in hass.states.async_all() if state.entity_id in
                {e.entity_id for e in er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)}}
     assert domains == {"sensor", "binary_sensor", "button", "select", "light", "number", "media_player"}
@@ -127,7 +131,7 @@ async def test_all_platforms_units_and_services(hass, entry, controllers):
         ("button", "press", "pause", {}),
         ("light", "turn_on", "pixels", {"brightness": 80}),
         ("number", "set_value", "aux_1_intensity", {"value": 50}),
-        ("select", "select_option", "playlist", {"option": "show.pl"}),
+        ("select", "select_option", "playlist", {"option": "show"}),
         ("media_player", "play_media", "playlist_player", {"media_content_type": DOMAIN, "media_content_id": "show.pl"}),
     ]:
         await hass.services.async_call(domain, action, {"entity_id": entity_id(hass, entry, domain, key)} | data, blocking=True)
@@ -169,7 +173,7 @@ async def test_replacement_between_compound_commands_does_not_retry(hass, entry,
     replacement = device("AC-DE-48-00-00-81")
     original["replace_after_command"] = replacement
     coordinator = entry.runtime_data
-    with pytest.raises(HomeAssistantError, match="identity mismatch"):
+    with pytest.raises(HomeAssistantError, match="different controller"):
         await coordinator.commands([("modePlayback", {"op": "Color", "color": [65535, 0, 0]}),
                                     ("progInt", {"item": [{"out": "Pix", "op": "HiSet", "fc": 100}]})])
     await hass.async_block_till_done()
@@ -255,7 +259,7 @@ async def test_saved_default_port_form_round_trip(hass, entry, controllers, sour
     result = await hass.config_entries.flow.async_configure(form["flow_id"], submitted)
     assert result["type"] is FlowResultType.ABORT
     await hass.async_block_till_done()
-    assert entry.data["port"] is None
+    assert entry.data.get("port") is None
     assert entry.runtime_data.client.base_url.endswith(f":{4443 if tls else 80}")
 
 
@@ -270,7 +274,7 @@ async def test_connection_form_preserves_unrelated_entry_data(hass, entry, contr
         result = await hass.config_entries.flow.async_configure(form["flow_id"], DATA | {"port": 0})
         await hass.async_block_till_done()
     assert result["type"] is FlowResultType.ABORT
-    assert entry.data["port"] is None
+    assert entry.data.get("port") is None
     assert entry.data["future_metadata"] == "keep"
 
 
@@ -284,7 +288,7 @@ async def test_file_refresh_button_routes_through_ha_services(hass, entry, contr
     await hass.services.async_call("button", "press", {"entity_id": entity_id(hass, entry, "button", "refresh")}, blocking=True)
     await hass.async_block_till_done()
     assert current["requests"].count("fileList") == 2
-    assert hass.states.get(entity_id(hass, entry, "select", "playlist")).attributes["options"] == ["fresh.pl"]
+    assert hass.states.get(entity_id(hass, entry, "select", "playlist")).attributes["options"] == ["fresh"]
     assert current["commands"] == []
 
 

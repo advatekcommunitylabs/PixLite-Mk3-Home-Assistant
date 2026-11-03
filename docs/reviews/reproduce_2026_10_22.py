@@ -66,16 +66,17 @@ async def test_runtime_address_swap_blocks_outputs(modules):
             coordinator = modules.coordinator.PixLiteCoordinator(
                 None, SimpleNamespace(title="First controller", unique_id=expected_id), client
             )
-            coordinator.async_request_refresh = AsyncMock()
+            coordinator._verify_identity = lambda: client.verify_identity(expected_id)
+            coordinator.async_refresh = AsyncMock()
             device["offline"] = True
             with pytest.raises(modules.coordinator.UpdateFailed):
                 await coordinator._async_update_data()
             # Simulate another controller accepting the same credentials at this address.
             device["offline"] = False
             device["mac"] = second_mac
-            with pytest.raises(modules.coordinator.UpdateFailed, match="identity mismatch"):
+            with pytest.raises(modules.coordinator.UpdateFailed, match="different controller"):
                 await coordinator._async_update_data()
-            with pytest.raises(Exception, match="identity mismatch"):
+            with pytest.raises(Exception, match="different controller"):
                 await coordinator.command("modePlayback", {"op": "Blank"})
             assert device["outputs"] == []
             assert client.unique_id == expected_id

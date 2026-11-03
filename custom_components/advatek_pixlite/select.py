@@ -1,44 +1,73 @@
 """Start an on-controller Showtime scene or playlist."""
+
 from homeassistant.components.select import SelectEntity
 from homeassistant.exceptions import HomeAssistantError
+
+from .controls import (
+    color_params,
+    palette,
+    pixel_intensity,
+    require_color_channels,
+    solid_color,
+    validate_color,
+)
 from .entity import PixLiteEntity
-from .controls import color_params, palette, pixel_intensity, solid_color
+from .file_names import display_name
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    async_add_entities([
-        ShowtimeSelect(entry.runtime_data, "showtime", "Showtime file"),
-        PlaylistSelect(entry.runtime_data, "playlist", "Showtime playlist"),
-        PaletteSelect(entry.runtime_data, "palette", "Showtime colour preset"),
-        IntensityPrioritySelect(entry.runtime_data, "intensity_priority", "Intensity priority"),
-    ])
+    async_add_entities(
+        [
+            ShowtimeSelect(entry.runtime_data, "showtime", "Showtime scene"),
+            PlaylistSelect(entry.runtime_data, "playlist", "Showtime playlist"),
+            PaletteSelect(entry.runtime_data, "palette", "Showtime colour preset"),
+            IntensityPrioritySelect(
+                entry.runtime_data, "intensity_priority", "Intensity priority"
+            ),
+        ]
+    )
 
 
 class ShowtimeSelect(PixLiteEntity, SelectEntity):
     _attr_icon = "mdi:movie-play"
+    _file_extension = ".scn"
+
+    @property
+    def files(self):
+        return [
+            file
+            for file in self.coordinator.data["files"]
+            if file.lower().endswith(self._file_extension)
+        ]
 
     @property
     def options(self):
-        return self.coordinator.data["files"]
+        return list(dict.fromkeys(display_name(file) for file in self.files))
 
     @property
     def current_option(self):
         status = self.coordinator.data["status"]
         file = (status.get("params") or {}).get("file")
-        return file if status.get("mode") == "playback" and file in self.options else None
+        return (
+            display_name(file)
+            if status.get("mode") == "playback" and file in self.files
+            else None
+        )
 
     async def async_select_option(self, option):
-        if option not in self.options:
-            raise HomeAssistantError("File is no longer available; refresh the file list")
-        await self.coordinator.command("modePlayback", {"op": "File", "file": option, "cnt": 0})
+        matches = [file for file in self.files if display_name(file) == option]
+        if len(matches) != 1:
+            raise HomeAssistantError(
+                "File is unavailable or its name is ambiguous; refresh the file list"
+            )
+        await self.coordinator.command(
+            "modePlayback", {"op": "File", "file": matches[0], "cnt": 0}
+        )
 
 
 class PlaylistSelect(ShowtimeSelect):
     _attr_icon = "mdi:playlist-play"
-
-    @property
-    def options(self):
-        return [file for file in super().options if file.lower().endswith(".pl")]
+    _file_extension = ".pl"
 
 
 class PaletteSelect(PixLiteEntity, SelectEntity):
@@ -52,20 +81,30 @@ class PaletteSelect(PixLiteEntity, SelectEntity):
     def current_option(self):
         current = solid_color(self.coordinator.data)
         for i, color in enumerate(palette(self.coordinator.data)):
-            if current is not None and (current + (0,) * (5-len(current))) == (color + (0,) * (5-len(color))):
+            if current is not None and (current + (0,) * (5 - len(current))) == (
+                color + (0,) * (5 - len(color))
+            ):
                 return self.options[i]
         return None
 
     @property
     def extra_state_attributes(self):
-        return {"colours_16bit": dict(zip(self.options, palette(self.coordinator.data)))}
+        return {
+            "colours_16bit": dict(zip(self.options, palette(self.coordinator.data)))
+        }
 
     async def async_select_option(self, option):
-        if option not in self.options:
-            raise HomeAssistantError("Colour preset is no longer available")
-        color = palette(self.coordinator.data)[self.options.index(option)]
-        fade = self.coordinator.data["config"].get("operIf", {}).get("fadeMs", 0)
-        await self.coordinator.command("modePlayback", color_params(color, fade))
+        def build_color(data):
+            require_color_channels(data)
+            colors = palette(data)
+            options = [f"Preset {i + 1}" for i in range(len(colors))]
+            if option not in options:
+                raise ValueError("Colour preset is no longer available")
+            color = validate_color(data, colors[options.index(option)])
+            fade = data["config"].get("operIf", {}).get("fadeMs", 0)
+            return [("modePlayback", color_params(color, fade))]
+
+        await self.coordinator.color_commands(build_color)
 
 
 class IntensityPrioritySelect(PixLiteEntity, SelectEntity):
@@ -79,4 +118,14 @@ class IntensityPrioritySelect(PixLiteEntity, SelectEntity):
     async def async_select_option(self, option):
         if option not in self._attr_options:
             raise HomeAssistantError("Unknown intensity priority")
-        await self.coordinator.command("progInt", {"item": [{"out": "Pix", "op": "Hi" if option == self._attr_options[0] else "Lo"}]})
+        await self.coordinator.command(
+            "progInt",
+            {
+                "item": [
+                    {
+                        "out": "Pix",
+                        "op": "Hi" if option == self._attr_options[0] else "Lo",
+                    }
+                ]
+            },
+        )

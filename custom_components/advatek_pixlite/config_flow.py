@@ -1,9 +1,20 @@
 """UI setup, reconfiguration and reauthentication."""
-import voluptuous as vol
+
+import probatio
+
 from homeassistant import config_entries
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers import selector
-from .api import InvalidAuth, PixLiteClient, PixLiteError, UnsupportedDevice, normalize_host
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+from .api import (
+    InvalidAuth,
+    InvalidCertificate,
+    InvalidMAC,
+    PixLiteClient,
+    PixLiteError,
+    UnsupportedDevice,
+    normalize_host,
+)
 from .const import DOMAIN
 
 
@@ -38,10 +49,14 @@ class PixLiteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data["host"] = normalize_host(data["host"])
                 client = PixLiteClient(async_get_clientsession(self.hass), **data)
                 await client.initialize()
+            except InvalidMAC:
+                errors["expected_mac"] = "invalid_mac"
             except ValueError:
                 errors["host"] = "invalid_host"
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
+            except InvalidCertificate as err:
+                errors["base"] = err.reason
             except UnsupportedDevice:
                 errors["base"] = "unsupported_device"
             except PixLiteError:
@@ -51,23 +66,42 @@ class PixLiteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if entry:
                     if entry.unique_id != client.unique_id:
                         return self.async_abort(reason="wrong_device")
-                    # port is explicitly None when cleared; merge preserves any
-                    # entry metadata outside this connection form.
                     return self.async_update_reload_and_abort(entry, data_updates=data)
                 self._abort_if_unique_id_configured()
-                title = client.version.get("nickname") or client.constants["dev"]["prodName"]
+                title = (
+                    client.version.get("nickname")
+                    or client.constants["dev"]["prodName"]
+                )
                 return self.async_create_entry(title=title, data=data)
             defaults.update(user_input)
-        schema = vol.Schema({
-            vol.Required("host", default=defaults.get("host", "")): str,
-            vol.Required("username", default=defaults.get("username", "admin")): selector.SelectSelector(
-                selector.SelectSelectorConfig(options=[
-                    {"value": "admin", "label": "Administrator"},
-                    {"value": "oper", "label": "Operator"},
-                ], mode=selector.SelectSelectorMode.DROPDOWN)),
-            vol.Optional("password", default=defaults.get("password", "")): selector.TextSelector(
-                selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)),
-            vol.Required("use_ssl", default=defaults.get("use_ssl", False)): bool,
-            vol.Optional("port", default=defaults.get("port") or 0): vol.All(vol.Coerce(int), vol.Range(min=0, max=65535)),
-        })
+        schema = probatio.Schema(
+            {
+                probatio.Required("host", default=defaults.get("host", "")): str,
+                probatio.Required(
+                    "username", default=defaults.get("username", "admin")
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            {"value": "admin", "label": "Administrator"},
+                            {"value": "oper", "label": "Operator"},
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                probatio.Optional(
+                    "password", default=defaults.get("password", "")
+                ): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+                ),
+                probatio.Required(
+                    "use_ssl", default=defaults.get("use_ssl", False)
+                ): bool,
+                probatio.Optional(
+                    "expected_mac", default=defaults.get("expected_mac", "")
+                ): str,
+                probatio.Optional(
+                    "port", default=defaults.get("port") or 0,
+                ): probatio.All(probatio.Coerce(int), probatio.Range(min=0, max=65535)),
+            }
+        )
         return self.async_show_form(step_id=step, data_schema=schema, errors=errors)
