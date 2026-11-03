@@ -1,5 +1,7 @@
 """Playback controls."""
+
 from homeassistant.components.button import ButtonEntity
+
 from .entity import PixLiteEntity
 
 CONTROLS = [
@@ -16,15 +18,21 @@ CONTROLS = [
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    async_add_entities([PixLiteButton(entry.runtime_data, *control) for control in CONTROLS])
+    async_add_entities(
+        [PixLiteButton(entry.runtime_data, *control) for control in CONTROLS]
+    )
 
 
 class PixLiteButton(PixLiteEntity, ButtonEntity):
     def __init__(self, coordinator, key, name, command, params):
         super().__init__(coordinator, key, name)
         self.command_name, self.params = command, params
-        icons = {"resume": "mdi:play", "pause": "mdi:pause",
-                 "previous": "mdi:skip-previous", "next": "mdi:skip-next"}
+        icons = {
+            "resume": "mdi:play",
+            "pause": "mdi:pause",
+            "previous": "mdi:skip-previous",
+            "next": "mdi:skip-next",
+        }
         if key in icons:
             self._attr_icon = icons[key]
 

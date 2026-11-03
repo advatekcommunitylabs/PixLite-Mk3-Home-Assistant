@@ -22,7 +22,7 @@ def modules(monkeypatch):
         monkeypatch.setitem(sys.modules, name, module)
     light = ModuleType("homeassistant.components.light")
     light.LightEntity = type("LightEntity", (), {})
-    light.ColorMode = SimpleNamespace(RGB="rgb", RGBW="rgbw")
+    light.ColorMode = SimpleNamespace(RGB="rgb", RGBW="rgbw", BRIGHTNESS="brightness")
     light.LightEntityFeature = SimpleNamespace(TRANSITION=32)
     for attr in ["BRIGHTNESS", "RGB_COLOR", "RGBW_COLOR", "TRANSITION"]:
         setattr(light, "ATTR_" + attr, attr.lower())
@@ -89,12 +89,21 @@ def modules(monkeypatch):
 
 @pytest.fixture
 def coordinator():
-    return SimpleNamespace(data={
+    coordinator = SimpleNamespace(data={
         "config": {"pix": {"colorType": "RGB"}, "operIf": {"pal": [[255, 0, 0]], "colorRes": "8Bit", "fadeMs": 500}},
         "status": {"mode": "playback", "params": {"op": "File", "file": "show.pl"},
                    "outInt": [{"out": "Pix", "progPri": "Hi", "fc": [20, 128]}]},
         "statistic": {"pixData": {"liveIntAv": True}},
     }, commands=AsyncMock(), command=AsyncMock(), last_update_success=True)
+    async def color_commands(build_commands):
+        try:
+            commands = build_commands(coordinator.data)
+        except ValueError as err:
+            from homeassistant.exceptions import HomeAssistantError
+            raise HomeAssistantError(str(err)) from err
+        await coordinator.commands(commands)
+    coordinator.color_commands = color_commands
+    return coordinator
 
 
 @pytest.mark.asyncio
@@ -153,12 +162,13 @@ def test_unknown_brightness_and_no_invented_scene_colour(modules, coordinator):
 @pytest.mark.parametrize("resolution,color,expected", [("8Bit", [255, 128, 0], [65535, 32896, 0]), ("16Bit", [123, 456, 789, 1000, 2345], [123, 456, 789, 1000, 2345])])
 @pytest.mark.asyncio
 async def test_palette_preserves_resolution_and_channels(modules, coordinator, resolution, color, expected):
+    coordinator.data["config"]["pix"]["colorType"] = "RGBWX" if len(color) == 5 else "RGB"
     coordinator.data["config"]["operIf"].update(pal=[color], colorRes=resolution)
     select = modules.select.PaletteSelect(coordinator, "palette", "Palette")
     assert select.options == ["Preset 1"]
     assert select.current_option is None
     await select.async_select_option("Preset 1")
-    coordinator.command.assert_awaited_once_with("modePlayback", modules.controls.color_params(expected, 500))
+    coordinator.commands.assert_awaited_once_with([("modePlayback", modules.controls.color_params(expected, 500))])
     coordinator.data["status"]["params"] = {"op": "Color", "color": expected, "colorRes": "16Bit"}
     assert select.current_option == "Preset 1"
 
@@ -298,13 +308,14 @@ async def test_poll_requests_aux_fields_on_capable_devices(modules):
 async def test_playlist_selector_and_browser_filter_scenes(modules, coordinator):
     coordinator.data["files"] = ["show.pl", "Rainbow.scn", "Evening.PL"]
     select = modules.select.PlaylistSelect(coordinator, "playlist", "Playlist")
-    assert select.options == ["show.pl", "Evening.PL"]
-    assert select.current_option == "show.pl"
-    await select.async_select_option("Evening.PL")
+    assert select.options == ["show", "Evening"]
+    assert select.current_option == "show"
+    await select.async_select_option("Evening")
     coordinator.command.assert_awaited_once_with("modePlayback", {"op": "File", "file": "Evening.PL", "cnt": 0})
     player = modules.media_player.PlaylistPlayer(coordinator)
     tree = await player.async_browse_media()
-    assert [child.media_content_id for child in tree.children] == select.options
+    assert [child.title for child in tree.children] == select.options
+    assert [child.media_content_id for child in tree.children] == ["show.pl", "Evening.PL"]
     assert all(child.can_play and not child.can_expand for child in tree.children)
     coordinator.data["files"] = []
     assert (await player.async_browse_media()).children == []
@@ -334,8 +345,8 @@ async def test_playlist_status_and_transport(modules, coordinator):
     player = modules.media_player.PlaylistPlayer(coordinator)
     coordinator.data["status"]["state"] = {"item": 2, "op": "File", "file": "Rainbow.scn", "paus": True, "timS": 42}
     assert player.state == "paused"
-    assert player.media_title == "show.pl"
-    assert player.extra_state_attributes["item_file"] == "Rainbow.scn"
+    assert player.media_title == "show"
+    assert player.extra_state_attributes["item_file"] == "Rainbow"
     for method, op in [("async_media_play", "Play"), ("async_media_pause", "Paus"), ("async_media_next_track", "Nxt"), ("async_media_previous_track", "Prv")]:
         await getattr(player, method)()
         coordinator.command.assert_awaited_with("playbackCtrl", {"op": op})
@@ -360,3 +371,305 @@ async def test_playlist_rejects_unknown_files_and_queueing(modules, coordinator)
     with pytest.raises(Exception, match="not supported"):
         await player.async_play_media("playlist", "show.pl", enqueue="add")
     coordinator.command.assert_not_awaited()
+
+
+@pytest.mark.parametrize("kind,expected", [("RGB", "rgb"), ("RGBW", "rgbw"), ("RGBWX", "rgbw")])
+def test_colour_mode_follows_controller_selection(modules, coordinator, kind, expected):
+    coordinator.data["config"]["pix"]["colorType"] = kind
+    light = modules.light.PixLiteLight(coordinator)
+    assert light.supported_color_modes == {expected}
+    assert light.color_mode == expected
+
+
+@pytest.mark.asyncio
+async def test_rgbw_picker_retains_four_channels(modules, coordinator):
+    coordinator.data["config"]["pix"]["colorType"] = "RGBW"
+    light = modules.light.PixLiteLight(coordinator)
+    await light.async_turn_on(rgbw_color=(1, 2, 3, 255))
+    assert coordinator.commands.call_args.args[0][0][1]["color"] == [257, 514, 771, 65535]
+
+
+@pytest.mark.asyncio
+async def test_rgbwx_from_file_starts_with_zero_x(modules, coordinator):
+    coordinator.data["config"]["pix"]["colorType"] = "RGBWX"
+    light = modules.light.PixLiteLight(coordinator)
+    await light.async_turn_on(rgbw_color=(1, 2, 3, 4))
+    assert coordinator.commands.call_args.args[0][0][1]["color"] == [257, 514, 771, 1028, 0]
+
+
+@pytest.mark.parametrize("kind", [None, "", "Unknown", ["RGB"]])
+@pytest.mark.asyncio
+async def test_unknown_colour_type_rejects_picker_palette_and_blank_restore(modules, coordinator, kind):
+    coordinator.data["config"]["pix"]["colorType"] = kind
+    light = modules.light.PixLiteLight(coordinator)
+    assert light.supported_color_modes == {"brightness"}
+    with pytest.raises(Exception, match="missing or unsupported"):
+        await light.async_turn_on(rgb_color=(1, 2, 3))
+    with pytest.raises(Exception, match="missing or unsupported"):
+        await modules.select.PaletteSelect(coordinator, "palette", "Palette").async_select_option("Preset 1")
+    coordinator.data["status"]["params"] = {"op": "Blank"}
+    with pytest.raises(Exception, match="missing or unsupported"):
+        await light.async_turn_on()
+    coordinator.commands.assert_not_awaited()
+    with pytest.raises(Exception, match="missing or unsupported"):
+        await light.async_turn_on(brightness=90)
+    coordinator.data["status"].update(mode="live", params={})
+    await light.async_turn_on(brightness=90)
+    assert coordinator.commands.call_args.args[0] == [("progInt", modules.controls.intensity_params(90))]
+
+
+@pytest.mark.parametrize("kind,count", [("RGB", 3), ("RGBW", 4), ("RGBWX", 5)])
+@pytest.mark.asyncio
+async def test_blank_restore_sends_configured_channel_count(modules, coordinator, kind, count):
+    coordinator.data["config"]["pix"]["colorType"] = kind
+    coordinator.data["status"]["params"] = {"op": "Blank"}
+    await modules.light.PixLiteLight(coordinator).async_turn_on()
+    assert coordinator.commands.call_args.args[0][0][1]["color"] == [65535, 65535, 65535] + [0] * (count - 3)
+
+
+@pytest.mark.parametrize("kind,channel,resolution,color,expected", [
+    ("RGBW", 3, "8Bit", [1, 2, 3, 4], [257, 514, 771, 12345]),
+    ("RGBWX", 3, "16Bit", [1, 2, 3, 4, 5], [1, 2, 3, 12345, 5]),
+    ("RGBWX", 4, "16Bit", [1, 2, 3, 4, 5], [1, 2, 3, 4, 12345]),
+    ("RGBWX", 4, "8Bit", [1, 2, 3, 4, 5], [257, 514, 771, 1028, 12345]),
+])
+@pytest.mark.asyncio
+async def test_raw_channel_preserves_other_channels_and_intensity(modules, coordinator, kind, channel, resolution, color, expected):
+    coordinator.data["config"]["pix"]["colorType"] = kind
+    coordinator.data["status"]["params"] = {"op": "Color", "color": color, "colorRes": resolution}
+    entity = modules.number.SolidColorChannel(coordinator, channel)
+    assert entity.available
+    assert entity.native_value == color[channel] * (257 if resolution == "8Bit" else 1)
+    await entity.async_set_native_value(12345)
+    assert coordinator.commands.call_args.args[0] == [("modePlayback", modules.controls.color_params(expected))]
+    coordinator.command.assert_not_awaited()
+
+
+@pytest.mark.parametrize("value", [-1, 65536, 1.5, True, float("nan"), float("inf"), "3"])
+@pytest.mark.asyncio
+async def test_raw_channel_rejects_invalid_values(modules, coordinator, value):
+    with pytest.raises(Exception, match="integer between"):
+        await modules.number.SolidColorChannel(coordinator, 4).async_set_native_value(value)
+    coordinator.commands.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_raw_channel_never_replaces_file_or_reuses_removed_channel(modules, coordinator):
+    coordinator.data["config"]["pix"]["colorType"] = "RGBWX"
+    entity = modules.number.SolidColorChannel(coordinator, 4)
+    assert not entity.available
+    assert entity.native_value is None
+    with pytest.raises(Exception, match="solid colour"):
+        await entity.async_set_native_value(100)
+    coordinator.data["config"]["pix"]["colorType"] = "RGBW"
+    with pytest.raises(Exception, match="not supported"):
+        await entity.async_set_native_value(100)
+    coordinator.commands.assert_not_awaited()
+
+
+@pytest.mark.parametrize("resolution,color", [("8Bit", [1, 2, 3, 4, 256]), ("16Bit", [1, 2, 3, 4]), ("16Bit", [1, 2, 3, 4, True]), ("Bogus", [1, 2, 3, 4, 5])])
+@pytest.mark.asyncio
+async def test_malformed_x_is_not_overwritten_by_picker(modules, coordinator, resolution, color):
+    coordinator.data["config"]["pix"]["colorType"] = "RGBWX"
+    coordinator.data["status"]["params"] = {"op": "Color", "color": color, "colorRes": resolution}
+    with pytest.raises(Exception, match="cannot be preserved"):
+        await modules.light.PixLiteLight(coordinator).async_turn_on(rgbw_color=(1, 2, 3, 4))
+    coordinator.commands.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_palette_channel_mismatch_is_rejected(modules, coordinator):
+    coordinator.data["config"]["pix"]["colorType"] = "RGBWX"
+    entity = modules.select.PaletteSelect(coordinator, "palette", "Palette")
+    assert entity.options == []
+    with pytest.raises(Exception, match="no longer available"):
+        await entity.async_select_option("Preset 1")
+    coordinator.commands.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_colour_commands_read_current_configuration_before_any_write(modules):
+    client = SimpleNamespace(constants={"dev": {}},
+        read=AsyncMock(side_effect=[{"pix": {"colorType": "Unsupported"}}, {}]), request=AsyncMock())
+    coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test"), client)
+    coordinator.data = {"config": {"pix": {"colorType": "RGBWX"}}}
+    coordinator.async_refresh = AsyncMock()
+    def build(data):
+        modules.controls.require_color_channels(data)
+        return [("modePlayback", {})]
+    with pytest.raises(Exception, match="missing or unsupported"):
+        await coordinator.color_commands(build)
+    client.request.assert_not_awaited()
+    coordinator.async_refresh.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_raw_channel_changes_use_latest_status(modules):
+    from copy import deepcopy
+    data = {"config": {"pix": {"colorType": "RGBWX"}}, "status": {"mode": "playback", "params": {
+        "op": "Color", "color": [1, 2, 3, 4, 5], "colorRes": "16Bit"}}}
+    async def read(name, paths=None):
+        await asyncio.sleep(0)
+        return deepcopy(data[name])
+    async def request(name, params):
+        await asyncio.sleep(0)
+        data["status"]["params"] = deepcopy(params)
+    client = SimpleNamespace(read=AsyncMock(side_effect=read), request=AsyncMock(side_effect=request))
+    coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test"), client)
+    coordinator.data = deepcopy(data)
+    coordinator.async_refresh = AsyncMock()
+    await asyncio.gather(
+        modules.number.SolidColorChannel(coordinator, 3).async_set_native_value(12345),
+        modules.number.SolidColorChannel(coordinator, 4).async_set_native_value(54321))
+    assert data["status"]["params"]["color"] == [1, 2, 3, 12345, 54321]
+
+
+@pytest.mark.asyncio
+async def test_raw_channels_appear_only_once_as_configuration_changes(modules, coordinator):
+    from unittest.mock import Mock
+    coordinator.client = SimpleNamespace(constants={"dev": {"auxPorts": 0}})
+    coordinator.async_add_listener = Mock(return_value=lambda: None)
+    entry = SimpleNamespace(runtime_data=coordinator, async_on_unload=Mock())
+    add = Mock()
+    await modules.number.async_setup_entry(None, entry, add)
+    add.assert_not_called()
+    listener = coordinator.async_add_listener.call_args.args[0]
+    coordinator.data["config"]["pix"]["colorType"] = "RGBW"
+    listener()
+    assert [entity.channel for entity in add.call_args.args[0]] == [3]
+    coordinator.data["config"]["pix"]["colorType"] = "RGBWX"
+    listener()
+    assert [entity.channel for entity in add.call_args.args[0]] == [4]
+    listener()
+    assert add.call_count == 2
+    assert not add.call_args.args[0][0]._attr_entity_registry_enabled_default
+
+
+@pytest.mark.parametrize("resolution,color", [("8Bit", [256, 0, 0]), ("16Bit", [True, 0, 0]), ("Bogus", [1, 2, 3])])
+@pytest.mark.asyncio
+async def test_malformed_palette_never_sends_a_colour(modules, coordinator, resolution, color):
+    coordinator.data["config"]["operIf"].update(colorRes=resolution, pal=[color])
+    entity = modules.select.PaletteSelect(coordinator, "palette", "Palette")
+    assert entity.options == []
+    with pytest.raises(Exception, match="no longer available"):
+        await entity.async_select_option("Preset 1")
+    coordinator.commands.assert_not_awaited()
+
+
+@pytest.mark.parametrize("config", [None, {}, {"pix": None}, {"pix": []}])
+@pytest.mark.asyncio
+async def test_missing_configuration_blocks_colour_writes(modules, coordinator, config):
+    coordinator.data["config"] = config
+    entity = modules.light.PixLiteLight(coordinator)
+    assert entity.color_mode == "brightness"
+    with pytest.raises(Exception, match="missing or unsupported"):
+        await entity.async_turn_on(rgb_color=(1, 2, 3))
+    coordinator.commands.assert_not_awaited()
+
+
+@pytest.mark.parametrize("kind,color,expected", [
+    ("RGB", [47802, 12336, 65535, 0], (47802, 12336, 65535)),
+    ("RGB", [0, 0, 0, 123, 456], (0, 0, 0)),
+    ("RGBW", [1, 2, 3, 4, 5], (1, 2, 3, 4)),
+    ("RGBWX", [1, 2, 3, 4], None),
+    ("RGB", [1, 2, 3, 4, 5, 6], None),
+    ("RGB", [1, 2, 3, -1], None),
+])
+def test_colour_status_ignores_only_unused_valid_channels(modules, coordinator, kind, color, expected):
+    coordinator.data["config"]["pix"]["colorType"] = kind
+    coordinator.data["status"]["params"] = {"op": "Color", "color": color, "colorRes": "16Bit"}
+    assert modules.controls.solid_color(coordinator.data) == expected
+
+
+@pytest.mark.asyncio
+async def test_unused_status_channels_do_not_relax_outbound_validation(modules, coordinator):
+    coordinator.data["status"]["params"] = {"op": "Color", "color": [1, 2, 3, 0], "colorRes": "16Bit"}
+    with pytest.raises(ValueError, match="configured pixel channels"):
+        modules.controls.validate_color(coordinator.data, [1, 2, 3, 0])
+    with pytest.raises(Exception, match="configured pixel channels"):
+        await modules.light.PixLiteLight(coordinator).async_turn_on(rgbw_color=(1, 2, 3, 4))
+    coordinator.commands.assert_not_awaited()
+
+
+@pytest.mark.parametrize("kind,color,expected", [
+    ("RGB", [255, 0, 0, 0, 0], [(65535, 0, 0)]),
+    ("RGBW", [1, 2, 3, 4, 5], [(257, 514, 771, 1028)]),
+    ("RGBWX", [1, 2, 3, 4, 5], [(257, 514, 771, 1028, 1285)]),
+    ("RGBW", [1, 2, 3], []),
+    ("RGBWX", [1, 2, 3, 4], []),
+    ("RGB", [1, 2, 3, 4, 5, 6], []),
+    ("RGB", [1, 2, 3, 4, 256], []),
+])
+@pytest.mark.asyncio
+async def test_palette_uses_only_complete_configured_channels(modules, coordinator, kind, color, expected):
+    coordinator.data["config"]["pix"]["colorType"] = kind
+    coordinator.data["config"]["operIf"].update(pal=[color], colorRes="8Bit")
+    entity = modules.select.PaletteSelect(coordinator, "palette", "Palette")
+    assert modules.controls.palette(coordinator.data) == expected
+    if expected:
+        await entity.async_select_option("Preset 1")
+        assert coordinator.commands.call_args.args[0][0][1]["color"] == list(expected[0])
+    else:
+        assert entity.options == []
+        coordinator.commands.assert_not_awaited()
+
+
+@pytest.mark.parametrize("failure_index", [0, 1])
+@pytest.mark.asyncio
+async def test_colour_write_failure_refreshes_without_retry(modules, failure_index):
+    client = SimpleNamespace(read=AsyncMock(side_effect=[{"pix": {"colorType": "RGB"}}, {}]),
+        request=AsyncMock(side_effect=([{}] * failure_index + [modules.coordinator.PixLiteError("rejected")])) )
+    coordinator = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test"), client)
+    coordinator.data = {}
+    coordinator.async_refresh = AsyncMock()
+    with pytest.raises(Exception, match="rejected"):
+        await coordinator.color_commands(lambda data: [("modePlayback", {}), ("progInt", {})])
+    assert client.request.await_count == failure_index + 1
+    coordinator.async_refresh.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("code", [10, 14, None])
+async def test_file_attempt_interval_and_reinsertion(modules, monkeypatch, code):
+    now = [1000.0]
+    monkeypatch.setattr(modules.coordinator.time, "monotonic", lambda: now[0])
+    client = SimpleNamespace(constants={"dev": {}}, read=AsyncMock(return_value={}),
+                             files=AsyncMock(), verify_identity=AsyncMock())
+    if code:
+        client.files.side_effect = modules.coordinator.PixLiteError("Unavailable media", code)
+    else:
+        client.files.return_value = ["existing.pl"]
+    c = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test", unique_id="acde48000080"), client)
+    c._verify_identity = AsyncMock()
+    c.files = ["existing.pl"]
+    await c._async_update_data()
+    assert c.files == ([] if code == 14 else ["existing.pl"])
+    now[0] = 1010
+    await c._async_update_data()
+    assert client.files.await_count == 1
+    client.files.side_effect = None
+    client.files.return_value = ["inserted.pl"]
+    now[0] = 1060
+    await c._async_update_data()
+    assert client.files.await_count == 2
+    assert c.files == ["inserted.pl"]
+    c.files_updated = 0
+    now[0] = 1061
+    await c._async_update_data()
+    assert client.files.await_count == 3
+
+@pytest.mark.asyncio
+async def test_unexpected_file_errors_fail_update_and_require_identity_check(modules):
+    client = SimpleNamespace(constants={"dev": {}}, read=AsyncMock(return_value={}),
+                             files=AsyncMock(side_effect=modules.coordinator.PixLiteError("Failure", 999)),
+                             verify_identity=AsyncMock())
+    c = modules.coordinator.PixLiteCoordinator(None, SimpleNamespace(title="Test", unique_id="acde48000080"), client)
+    c._verify_identity = AsyncMock()
+    with pytest.raises(modules.coordinator.UpdateFailed):
+        await c._async_update_data()
+    assert c.files_updated == 0
+    client.files.side_effect = None
+    client.files.return_value = []
+    await c._async_update_data()
+    assert c._verify_identity.await_count == 2
+    c._verify_identity.assert_awaited_with()

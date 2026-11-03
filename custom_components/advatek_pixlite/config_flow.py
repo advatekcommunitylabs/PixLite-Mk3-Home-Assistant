@@ -10,6 +10,7 @@ from .adar_flow import AdarFlow
 from .api import (
     InvalidAuth,
     InvalidCertificate,
+    InvalidMAC,
     PixLiteClient,
     PixLiteError,
     UnsupportedDevice,
@@ -47,6 +48,8 @@ class PixLiteConfigFlow(AdarFlow, config_entries.ConfigFlow, domain=DOMAIN):
         try:
             await client.initialize()
             identity = normalize_mac(client.unique_id)
+        except InvalidMAC:
+            raise
         except (AttributeError, KeyError, TypeError, ValueError) as err:
             raise PixLiteError("Invalid controller identity response") from err
         return client, identity
@@ -68,10 +71,12 @@ class PixLiteConfigFlow(AdarFlow, config_entries.ConfigFlow, domain=DOMAIN):
             if step == "discovery_confirm":
                 data["host"] = self._selected.host
             data.setdefault("password", "")
-            data.setdefault("port", None)
+            data["port"] = data.get("port") or None
             try:
                 data["host"] = normalize_host(data["host"])
                 client, identity = await self._identify(data)
+            except InvalidMAC:
+                errors["expected_mac"] = "invalid_mac"
             except ValueError:
                 errors["host"] = "invalid_host"
             except InvalidAuth:
@@ -130,9 +135,11 @@ class PixLiteConfigFlow(AdarFlow, config_entries.ConfigFlow, domain=DOMAIN):
                     "use_ssl", default=defaults.get("use_ssl", False)
                 ): bool,
                 probatio.Optional(
-                    "port",
-                    **({"default": defaults["port"]} if defaults.get("port") is not None else {}),
-                ): probatio.Port(),
+                    "expected_mac", default=defaults.get("expected_mac", "")
+                ): str,
+                probatio.Optional("port", default=defaults.get("port") or 0): probatio.All(
+                    probatio.Coerce(int), probatio.Range(min=0, max=65535)
+                ),
             }
         )
         return self.async_show_form(

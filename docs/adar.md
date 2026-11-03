@@ -8,9 +8,9 @@ Only Advatek PixLite Mk3 devices advertising API v1.9, a web interface and norma
 
 ## Setup and lifecycle
 
-Adding the integration offers discovery or manual address entry. Empty and failed scans offer retry and manual setup. Incomplete scans label their results accordingly. Selecting a controller prompts for credentials, protocol and optional API port. Invalid credentials and identity mismatches cannot create an entry.
+Adding the integration offers discovery or manual address entry. Empty and failed scans offer retry and manual setup. Incomplete scans label their results accordingly. Selecting a controller prompts for credentials, protocol, API port and the optional HTTPS identity MAC. Port 0 uses HTTP 80 or HTTPS 4443 and clears a saved override. Advatek HTTPS requires a MAC supplied from the controller label; discovery never automatically provisions this trust setting from an unauthenticated packet. Invalid credentials and identity mismatches cannot create an entry.
 
-Once at least one controller entry is loaded, a single shared scanner runs every five minutes. Newly discovered controllers are offered through Home Assistant's integration discovery flow. Ignored devices remain ignored. An existing entry's address changes only after its saved credentials work at the new address and its API MAC matches the saved MAC. Saved credentials and the API port are preserved. Unloading the final entry or shutting down Home Assistant cancels discovery and closes its sockets.
+Once at least one controller entry is loaded, a single shared scanner runs every five minutes. Newly discovered controllers are offered through Home Assistant's integration discovery flow. Ignored devices remain ignored. An existing entry's address changes only after its saved credentials work at the new address and its API MAC matches the saved MAC. Saved credentials, API port, HTTPS selection and provisioned identity MAC are preserved. Unloading the final entry or shutting down Home Assistant cancels discovery and closes its sockets.
 
 Automatic discovery before the first entry is configured is not implemented. It needs a verified DHCP matcher or an agreed Home Assistant Core bootstrap mechanism. The manual setup scan remains available.
 
@@ -66,7 +66,7 @@ python -m build --outdir dist/adar custom_components/advatek_pixlite/_adar
 
 Home Assistant Core requires protocol communication in a separate open-source library published on PyPI. An approved license, public source, tagged releases, issue tracking, release validation and automated publication are still required. Core should then depend on that distribution instead of the bundled copy. No publication pipeline is enabled here; GitHub Actions remains disabled. This implementation does not claim Core acceptance or a Gold quality rating.
 
-Before release, verify multicast and broadcast on Linux in the intended Home Assistant deployment, each supported controller model and firmware, selected adapters, blocked multicast, duplicate replies, DHCP address changes, authentication failures and unload/shutdown cancellation. Loopback and local Windows runtime tests do not establish those behaviours on production networks or devices. Discovery's MAC verification applies to setup and discovered address updates. Continuous identity checking before output commands is not provided by this change.
+Before release, verify multicast and broadcast on Linux in the intended Home Assistant deployment, each supported controller model and firmware, selected adapters, blocked multicast, duplicate replies, DHCP address changes, authentication failures and unload/shutdown cancellation. Loopback and local Windows runtime tests do not establish those behaviours on production networks or devices. Discovery's MAC verification applies to setup and discovered address updates. The reconciled integration retains identity verification before every poll and each output request from main. These separate HTTP checks detect address reuse but cannot make multi-request actions atomic or authenticate an HTTP peer cryptographically.
 
 ## Protocol references
 

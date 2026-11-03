@@ -2,6 +2,30 @@
   "title": "Advatek PixLite Mk3",
   "config": {
     "step": {
+      "reconfigure": {
+        "title": "Connect a PixLite Mk3",
+        "description": "Enter the controller address. Set port to 0 to use HTTP 80 or HTTPS 4443. For Advatek HTTPS, enter its IPv4 address and the MAC from its label. Leave MAC blank only for conventional hostname and CA validation. The controller must be on a reachable subnet.",
+        "data": {
+          "host": "IP address or hostname",
+          "username": "User type",
+          "password": "Password",
+          "use_ssl": "Use HTTPS",
+          "port": "Port (0 = protocol default)",
+          "expected_mac": "Controller MAC (for Advatek HTTPS)"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Connect a PixLite Mk3",
+        "description": "Enter the controller address. Set port to 0 to use HTTP 80 or HTTPS 4443. For Advatek HTTPS, enter its IPv4 address and the MAC from its label. Leave MAC blank only for conventional hostname and CA validation. The controller must be on a reachable subnet.",
+        "data": {
+          "host": "IP address or hostname",
+          "username": "User type",
+          "password": "Password",
+          "use_ssl": "Use HTTPS",
+          "port": "Port (0 = protocol default)",
+          "expected_mac": "Controller MAC (for Advatek HTTPS)"
+        }
+      },
       "user": {
         "title": "Connect a PixLite Mk3",
         "description": "Discover controllers on the enabled Home Assistant network interfaces, or enter an address manually. Use addresses in the same subnet for a direct connection.",
@@ -10,47 +34,27 @@
           "manual": "Enter address manually"
         }
       },
-      "reconfigure": {
-        "title": "Connect a PixLite Mk3",
-        "description": "Enter the controller address. API v1.9 is required. HTTPS uses port 4443 unless overridden and requires a trusted certificate.",
-        "data": {
-          "host": "IP address or hostname",
-          "username": "User type",
-          "password": "Password",
-          "use_ssl": "Use HTTPS",
-          "port": "Port (optional)"
-        }
-      },
-      "reauth_confirm": {
-        "title": "Connect a PixLite Mk3",
-        "description": "Enter the controller address. API v1.9 is required. HTTPS uses port 4443 unless overridden and requires a trusted certificate.",
-        "data": {
-          "host": "IP address or hostname",
-          "username": "User type",
-          "password": "Password",
-          "use_ssl": "Use HTTPS",
-          "port": "Port (optional)"
-        }
-      },
       "manual": {
         "title": "Connect a PixLite Mk3",
-        "description": "Enter the controller address. API v1.9 is required. HTTPS uses port 4443 unless overridden and requires a trusted certificate. Use addresses in the same subnet for a direct connection.",
+        "description": "Enter the controller address. Set port to 0 to use HTTP 80 or HTTPS 4443. For Advatek HTTPS, enter its IPv4 address and the MAC from its label. Leave MAC blank only for conventional hostname and CA validation. The controller must be on a reachable subnet.",
         "data": {
           "host": "IP address or hostname",
           "username": "User type",
           "password": "Password",
           "use_ssl": "Use HTTPS",
-          "port": "Port (optional)"
+          "port": "Port (0 = protocol default)",
+          "expected_mac": "Controller MAC (for Advatek HTTPS)"
         }
       },
       "discovery_confirm": {
         "title": "Connect a PixLite Mk3",
-        "description": "Connect to the controller at {host}. Its MAC address will be checked through the authenticated API before it is added. API v1.9 is required. HTTPS defaults to port 4443 and requires a trusted certificate. Use addresses in the same subnet for a direct connection.",
+        "description": "Connect to the controller at {host}. Its MAC address will be checked through the authenticated API before it is added. Set port to 0 to use HTTP 80 or HTTPS 4443. For Advatek HTTPS, enter the controller MAC from its label. Leave MAC blank only for conventional hostname and CA validation. Use a reachable controller address.",
         "data": {
           "username": "User type",
           "password": "Password",
           "use_ssl": "Use HTTPS",
-          "port": "Port (optional)"
+          "port": "Port (0 = protocol default)",
+          "expected_mac": "Controller MAC (for Advatek HTTPS)"
         }
       },
       "select_device": {
@@ -82,13 +86,14 @@
       "invalid_auth": "Authentication failed. Check the user and password.",
       "unsupported_device": "A PixLite Mk3 supporting API v1.9 is required.",
       "cannot_connect": "Cannot communicate with the controller. Check address, credentials, network and TLS certificate.",
-      "identity_mismatch": "The API reports a different controller MAC address. Rescan and select the intended controller.",
-      "scan_incomplete": "The scan was incomplete. These are partial results; additional controllers may be missing.",
       "certificate_untrusted": "HTTPS certificate chain is not trusted. Obtain the Advatek root CA and configure trust in the Home Assistant runtime.",
-      "certificate_identity": "HTTPS certificate identity does not match the controller address. Contact Advatek.",
+      "certificate_identity": "HTTPS certificate identity does not match the configured controller. Check the MAC address against its label.",
       "certificate_purpose": "HTTPS certificate is not valid for TLS server authentication. Contact Advatek.",
       "certificate_validity": "HTTPS certificate is expired or not yet valid. Check the Home Assistant clock and contact Advatek.",
-      "certificate_invalid": "HTTPS certificate validation failed. Contact Advatek for the correct certificate setup."
+      "certificate_invalid": "HTTPS certificate validation failed. Contact Advatek for the correct certificate setup.",
+      "invalid_mac": "Enter the controller MAC from its label, for example AC:DE:48:00:00:80.",
+      "identity_mismatch": "The API reports a different controller MAC address. Rescan and select the intended controller.",
+      "scan_incomplete": "The scan was incomplete. These are partial results; additional controllers may be missing."
     },
     "abort": {
       "already_configured": "This controller is already configured.",
@@ -98,6 +103,57 @@
       "invalid_discovery": "The discovery information is invalid. Rescan or enter the address manually.",
       "device_not_found": "The selected controller is no longer in this scan. Scan again.",
       "cannot_connect": "The discovered address could not be verified with the saved credentials. The saved address was not changed."
+    }
+  },
+  "entity": {
+    "number": {
+      "solid_color_w": {
+        "name": "Solid colour W"
+      },
+      "solid_color_x": {
+        "name": "Solid colour X"
+      }
+    },
+    "sensor": {
+      "temperature": {
+        "name": "Temperature"
+      },
+      "cpu": {
+        "name": "CPU usage"
+      },
+      "input_rate": {
+        "name": "Input frame rate"
+      },
+      "output_rate": {
+        "name": "Output frame rate"
+      },
+      "mode": {
+        "name": "Mode"
+      },
+      "file": {
+        "name": "Playback file"
+      },
+      "playlist_item": {
+        "name": "Playlist item"
+      },
+      "playlist_item_type": {
+        "name": "Playlist item type"
+      },
+      "playlist_item_file": {
+        "name": "Playlist item file"
+      },
+      "bank_voltage": {
+        "name": "Bank {channel} voltage"
+      },
+      "output_current": {
+        "name": "Output {channel} current"
+      },
+      "output_status": {
+        "name": "Output {channel} power status"
+      },
+      "output_voltage": {
+        "name": "Output {channel} voltage"
+      }
     }
   }
 }

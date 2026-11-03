@@ -69,7 +69,7 @@ async def pair(ha):
         client.read = AsyncMock(side_effect=read)
         client.verify_identity = AsyncMock()
         client.initialize = AsyncMock()
-        client.files = AsyncMock(return_value=[filename])
+        client.files = AsyncMock(return_value=[filename, filename.removesuffix(".pl") + ".scn"])
         client.request = AsyncMock(return_value={})
         entry = MockConfigEntry(
             domain="advatek_pixlite", title="Shared name", unique_id=mac, data=data
@@ -217,7 +217,7 @@ async def test_reload_and_unload_preserve_other_entry_and_shared_scanner(pair, t
             "select",
             "select_option",
             "showtime",
-            ({"option": "A4-S.pl"}, {"option": "E16-S.pl"}),
+            ({"option": "A4-S"}, {"option": "E16-S"}),
             "modePlayback",
             "file",
         ),
@@ -225,7 +225,7 @@ async def test_reload_and_unload_preserve_other_entry_and_shared_scanner(pair, t
             "select",
             "select_option",
             "playlist",
-            ({"option": "A4-S.pl"}, {"option": "E16-S.pl"}),
+            ({"option": "A4-S"}, {"option": "E16-S"}),
             "modePlayback",
             "file",
         ),
@@ -324,7 +324,8 @@ async def test_concurrent_services_target_only_their_controller(
         name, params = item.client.request.call_args.args
         assert name == command
         if parameter == "file":
-            assert params["file"] == item.filename
+            expected = item.filename.removesuffix(".pl") + ".scn" if key == "showtime" else item.filename
+            assert params["file"] == expected
         elif parameter == "color":
             assert params["color"] == ([65535, 0, 0] if index == 0 else [0, 0, 65535])
         elif parameter in ("intensity", "off", "aux", "priority"):
@@ -402,7 +403,7 @@ async def test_refreshing_file_lists_does_not_mix_instances(pair):
     )
     for item in controllers:
         item.client.files.assert_awaited_once()
-        assert item.entry.runtime_data.files == [item.filename]
+        assert item.entry.runtime_data.files == [item.filename, item.filename.removesuffix(".pl") + ".scn"]
         item.client.request.assert_not_awaited()
 
 

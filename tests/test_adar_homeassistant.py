@@ -343,15 +343,16 @@ async def test_existing_or_ignored_controller_does_not_duplicate(ha, source):
         (MAC, InvalidAuth("changed credentials"), False),
     ],
 )
+@pytest.mark.parametrize("https", [False, True])
 async def test_new_address_is_saved_only_after_authenticated_mac_match(
-    ha, identity, error, changed
+    ha, identity, error, changed, https
 ):
     hass, client, factory, scan = ha
     entry = MockConfigEntry(
         domain="advatek_pixlite",
         title="Garden",
         unique_id=MAC,
-        data=DATA | {"host": "192.0.2.9", "port": 8080},
+        data=DATA | {"host": "192.0.2.9", "port": 8080, "use_ssl": https, "expected_mac": MAC if https else ""},
     )
     entry.add_to_hass(hass)
     client.unique_id = identity
@@ -365,6 +366,31 @@ async def test_new_address_is_saved_only_after_authenticated_mac_match(
     assert entry.data["host"] == (HOST if changed else "192.0.2.9")
     assert entry.data["port"] == 8080
     assert factory.call_args.kwargs["port"] == 8080
+    assert entry.data["use_ssl"] is https
+    assert entry.data["expected_mac"] == (MAC if https else "")
+    assert factory.call_args.kwargs["expected_mac"] == (MAC if https else "")
+    client.request.assert_not_awaited()
+
+
+async def test_discovery_confirmation_preserves_explicit_https_identity(ha):
+    """ADAR does not provision the trust MAC; the confirmation form supplies it."""
+    hass, client, factory, scan = ha
+    result = await hass.config_entries.flow.async_init(
+        "advatek_pixlite", context={"source": SOURCE_INTEGRATION_DISCOVERY},
+        data={"mac": MAC, "host": HOST, "model": DEVICE.model},
+    )
+    defaults = result["data_schema"]({})
+    assert defaults["expected_mac"] == ""
+    assert defaults["port"] == 0
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], defaults | {"use_ssl": True, "expected_mac": MAC},
+    )
+    assert result["type"] == "create_entry"
+    await hass.async_block_till_done()
+    assert result["data"]["host"] == HOST
+    assert result["data"]["port"] is None
+    assert result["data"]["expected_mac"] == MAC
+    assert factory.call_args.kwargs["expected_mac"] == MAC
     client.request.assert_not_awaited()
 
 
