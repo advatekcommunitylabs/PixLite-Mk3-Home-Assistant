@@ -108,6 +108,9 @@ async def test_reconfigure_omitted_port_clears_previous_override(modules, monkey
     monkeypatch.setitem(sys.modules, client_helper.__name__, client_helper)
     selectors = ModuleType("homeassistant.helpers.selector")
     monkeypatch.setitem(sys.modules, selectors.__name__, selectors)
+    adar_flow = ModuleType("pixlite_test.adar_flow")
+    adar_flow.AdarFlow = type("AdarFlow", (), {})
+    monkeypatch.setitem(sys.modules, adar_flow.__name__, adar_flow)
     flow_module = importlib.import_module("pixlite_test.config_flow")
     validated_ports = []
 

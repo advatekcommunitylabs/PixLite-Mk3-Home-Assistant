@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "advatek-adar"
+version = "0.1.0"
+description = "Asynchronous discovery-only Advatek Discovery and Recovery Protocol client"
+readme = "README.md"
+requires-python = ">=3.12"
+classifiers = ["Private :: Do Not Upload"]
+
+[tool.setuptools]
+packages = ["advatek_adar"]
+package-dir = {advatek_adar = "."}
+
+[tool.setuptools.package-data]
+advatek_adar = ["py.typed"]

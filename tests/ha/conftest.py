@@ -1,5 +1,6 @@
 """Real HA fixtures; replace only controller transport, never HA modules."""
 from copy import deepcopy
+from unittest.mock import AsyncMock
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -33,6 +34,15 @@ def device(mac="AC-DE-48-00-00-80"):
 @pytest.fixture(autouse=True)
 def enable_custom(enable_custom_integrations):
     """Allow this repository's integration in the real HA loader."""
+
+
+@pytest.fixture(autouse=True)
+def simulate_discovery(monkeypatch):
+    """Keep retained runtime tests off the LAN; discovery has its own tests."""
+    from custom_components.advatek_pixlite._adar import DiscoveryResult
+    from custom_components.advatek_pixlite.discovery import AdarDiscovery
+
+    monkeypatch.setattr(AdarDiscovery, "async_scan", AsyncMock(return_value=DiscoveryResult()))
 
 
 @pytest.fixture

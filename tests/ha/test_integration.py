@@ -29,13 +29,19 @@ def entity_id(hass, entry, domain, key):
     return er.async_get(hass).async_get_entity_id(domain, DOMAIN, f"{entry.unique_id}_{key}")
 
 
+async def manual_flow(hass):
+    menu = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    assert menu["type"] is FlowResultType.MENU
+    return await hass.config_entries.flow.async_configure(menu["flow_id"], {"next_step_id": "manual"})
+
+
 async def test_user_flow_and_duplicate(hass, controllers):
-    flow = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    flow = await manual_flow(hass)
     assert flow["type"] is FlowResultType.FORM
     result = await hass.config_entries.flow.async_configure(flow["flow_id"], DATA)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
-    flow = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    flow = await manual_flow(hass)
     result = await hass.config_entries.flow.async_configure(flow["flow_id"], DATA)
     assert result["reason"] == "already_configured"
 
@@ -53,7 +59,7 @@ async def test_flow_errors(hass, controllers, kind, error):
         controllers["controller.local"]["version"]["apiVer"] = [None]
     else:
         data["host"] = "http://bad/path"
-    flow = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    flow = await manual_flow(hass)
     result = await hass.config_entries.flow.async_configure(flow["flow_id"], data)
     assert error in result["errors"].values()
 
@@ -80,7 +86,7 @@ async def test_wrong_device_flow_preserves_entry(hass, entry, controllers, sourc
     flow = await hass.config_entries.flow.async_init(DOMAIN, context={"source": source, "entry_id": entry.entry_id},
                                                     data=entry.data if source == "reauth" else None)
     result = await hass.config_entries.flow.async_configure(flow["flow_id"], DATA)
-    assert result["reason"] == "wrong_device"
+    assert result["errors"] == {"base": "identity_mismatch"}
     assert dict(entry.data) == before
 
 
@@ -212,7 +218,7 @@ async def test_malformed_metadata_has_sanitized_ha_failure(hass, entry, controll
         current["version"]["nickname"] = ["invalid"]
     data = DATA | {"password": "test-secret-password"}
     if path == "flow":
-        flow = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+        flow = await manual_flow(hass)
         result = await hass.config_entries.flow.async_configure(flow["flow_id"], data)
         assert result["errors"] == {"base": "cannot_connect"}
     else:
@@ -323,7 +329,7 @@ async def test_malformed_error_code_is_sanitized_at_ha_boundaries(hass, entry, m
     monkeypatch.setattr(aiohttp.ClientSession, "request", request)
     hass.config_entries.async_update_entry(entry, data=DATA | {"password": secret})
     if stage == "flow":
-        flow = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+        flow = await manual_flow(hass)
         result = await hass.config_entries.flow.async_configure(flow["flow_id"], dict(entry.data))
         assert result["errors"] == {"base": "cannot_connect"}
     elif stage == "setup":

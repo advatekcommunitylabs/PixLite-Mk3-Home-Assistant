@@ -17,7 +17,15 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry, entity_registry, frame
 from homeassistant.setup import async_setup_component
 
+from custom_components.advatek_pixlite._adar import DiscoveryResult
+
 pytestmark = pytest.mark.asyncio
+
+
+async def manual_flow(hass, data):
+    menu = await hass.config_entries.flow.async_init("advatek_pixlite", context={"source": "user"})
+    form = await hass.config_entries.flow.async_configure(menu["flow_id"], {"next_step_id": "manual"})
+    return await hass.config_entries.flow.async_configure(form["flow_id"], data)
 
 
 class Resolver(ThreadedResolver):
@@ -188,17 +196,16 @@ async def devices(tmp_path, unused_tcp_port, request, monkeypatch):
         runners.append(runner)
         controllers.append(controller)
 
-    with patch(
+    with patch("custom_components.advatek_pixlite.discovery.AdarDiscovery.async_scan", AsyncMock(return_value=DiscoveryResult())), patch(
         "homeassistant.helpers.aiohttp_client._async_make_resolver",
         side_effect=lambda hass: Resolver(),
     ):
         try:
             assert await async_setup_component(hass, "http", {"http": {"server_host": "127.0.0.1", "server_port": unused_tcp_port}})
             for controller in controllers:
-                result = await hass.config_entries.flow.async_init(
-                    "advatek_pixlite",
-                    context={"source": "user"},
-                    data={
+                result = await manual_flow(
+                    hass,
+                    {
                         "host": "127.0.0.1",
                         "port": controller.port,
                         "username": "oper",
@@ -240,7 +247,7 @@ async def test_error_envelope_is_sanitized_through_real_ha(devices, stage, caplo
     first.error_envelope = {"code": {"request_url": url}, "msg": url}
     first.error_request = "constantRead" if stage in {"flow", "setup"} else ("statusRead" if stage == "poll" else "modePlayback")
     if stage == "flow":
-        result = await hass.config_entries.flow.async_init("advatek_pixlite", context={"source": "user"}, data=dict(first.entry.data))
+        result = await manual_flow(hass, dict(first.entry.data))
         assert result["errors"] == {"base": "cannot_connect"}
         hass.config_entries.flow.async_abort(result["flow_id"])
     elif stage == "setup":
@@ -269,7 +276,7 @@ async def test_malformed_metadata_is_sanitized_through_real_ha(devices, stage, f
     else:
         first.data["constant"]["dev"][field] = value
     if stage == "flow":
-        result = await hass.config_entries.flow.async_init("advatek_pixlite", context={"source": "user"}, data=dict(first.entry.data))
+        result = await manual_flow(hass, dict(first.entry.data))
         assert result["errors"] == {"base": "cannot_connect"}
         hass.config_entries.flow.async_abort(result["flow_id"])
     else:
