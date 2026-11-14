@@ -1,6 +1,10 @@
 # Advatek PixLite Mk3 for Home Assistant
 
-Local custom integration, version 0.4.1. Add one entry per controller; controllers have independent connections and polling. Device and entity IDs use the controller MAC address, so names and IP addresses can change without creating new entities.
+**Community beta:** [download the 0.4.1-beta.1 prerelease](https://github.com/advatekcommunitylabs/PixLite-Mk3-Home-Assistant/releases/tag/v0.4.1-beta.1). Read the [beta installation and feedback guide](custom_components/advatek_pixlite/BETA.md) before testing. This is an experimental custom integration, not a Home Assistant Core integration or Marketplace listing. Licensed under [Apache 2.0](LICENSE).
+
+The implementation and release review are AI-generated. Human review and maintenance remain required. The verified target is HA 2026.10.2 with A4-S/E16-S firmware 3.15.0; prior Windows runs used an isolated cleanup correction that is not shipped here. Linux, HA 2026.11, other models/firmware and endurance remain unqualified. GitHub Actions is disabled.
+
+Local custom integration, version 0.4.1-beta.1. Add one entry per controller; controllers have independent connections and polling. Device and entity IDs use the controller MAC address, so names and IP addresses can change without creating new entities.
 
 ## Install
 
@@ -35,7 +39,7 @@ Turning the light off sets programmed intensity to zero and keeps playback runni
 
 RGB pixels expose an RGB picker; RGBW pixels expose RGBW. RGBWX pixels expose RGBW and preserve the X channel from an existing solid colour, or use X=0 when switching from other modes. Optional **Solid colour W** and **Solid colour X** number entities provide independent raw 16-bit editing on supported controllers. Enable them in the entity settings. They are available during valid solid-colour playback and preserve the other channels and master intensity. Start a solid colour with the picker or a palette preset before editing W/X. X is not assumed to be warm/cold white; native RGBCCT temperature control is not implemented. See [colour coverage and verification requirements](docs/colour-model.md).
 
-Palette presets preserve all configured channels and their original 8/16-bit values. The picker sends 8-bit HA colour values scaled to 16-bit. Each colour write rereads the controller's colour type and status under the command lock. Missing or unsupported colour types block picker, preset and blank-to-colour writes, while brightness-only control remains available. Invalid channel vectors are rejected. These checks do not resolve the controller identity issue tracked in PR #1.
+Palette presets preserve all configured channels and their original 8/16-bit values. The picker sends 8-bit HA colour values scaled to 16-bit. Each colour write rereads the controller's colour type and status under the command lock. Missing or unsupported colour types block picker, preset and blank-to-colour writes, while brightness-only control remains available. Invalid channel vectors are rejected. Controller identity is checked separately before polling and each individual operating request; a mismatch blocks the request.
 
 Transitions are specified in seconds using standard HA light actions and sent in milliseconds. A colour-and-brightness action sends colour playback followed by intensity; these commands are serialized with other actions and polling. They are not an atomic controller transaction. A failure refreshes state to reflect any partially applied change. Status updates reflect controller polling rather than optimistic animation in HA.
 

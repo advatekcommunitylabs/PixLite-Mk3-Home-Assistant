@@ -1,5 +1,9 @@
 # Windows cleanup investigation
 
+## Beta status, 14 November 2026
+
+PR #2 was merged with no change to the tested runtime source. CPython merged the maintained correction and its 3.14 backport on 5 November ([backport PR #161392](https://github.com/python/cpython/pull/161392)). This project has not qualified a released interpreter containing that correction. The private test patch is not shipped in the beta or installed globally. The dated draft and issue-status statements below record the investigation at that time; they are not current PR or upstream issue status. Windows deployment qualification remains open.
+
 23 October 2026. This investigation used CPython 3.14.2, aiohttp 3.14.5, pyOpenSSL 26.4.0 and cryptography 50.0.1 on Windows. It made no controller requests. Linux checks were cancelled at the user's instruction and remain unverified. PR #2 must remain a draft.
 
 ## Confirmed cleanup defect

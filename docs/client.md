@@ -4,7 +4,7 @@ The `advatek-pixlite-client` distribution contains the asynchronous HTTP protoco
 
 Build a wheel and source distribution from the repository root with `python -m build`. For development, install it with `python -m pip install -e .`.
 
-Version 0.1.0 is a proposed first release, not an existing PyPI release. Do not publish it or add it to an upstream requirement until the source, release contents and license have been reviewed. Publication requires an agreed OSI-approved license, a public source repository and issue tracker, a matching release tag, and a public CI build and publication workflow. No license grant or release approval is asserted by this preparation.
+The integration and client source are licensed under Apache 2.0. Version 0.1.0 is a proposed client release, not an existing PyPI release. The custom-integration beta does not publish this standalone package. Keep its `Private :: Do Not Upload` classifier until a separate client-release review is complete. Core use still requires a matching public release tag, a PyPI source distribution and a transparent automated publication workflow. GitHub Actions remains disabled; this beta does not authorize enabling it or publishing to PyPI.
 
 The library uses a caller-owned aiohttp session, serializes HTTP requests, checks API v1.9 support, authenticates with the controller's password-hash query format, and returns controller objects. It does not configure Home Assistant, install entities, or manage Home Assistant state.
 

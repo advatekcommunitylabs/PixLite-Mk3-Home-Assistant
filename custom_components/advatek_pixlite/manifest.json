@@ -9,6 +9,6 @@
   "integration_type": "device",
   "iot_class": "local_polling",
   "requirements": ["pyOpenSSL==26.4.0"],
-  "version": "0.4.1",
+  "version": "0.4.1-beta.1",
   "issue_tracker": "https://github.com/advatekcommunitylabs/PixLite-Mk3-Home-Assistant/issues"
 }
